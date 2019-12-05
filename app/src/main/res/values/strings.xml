@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">VoiceAnalyzer</string>
+    <string name="button_record_text">録音開始</string>
+    <string name="button_stop_text">録音停止</string>
+</resources>
