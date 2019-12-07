@@ -10,17 +10,17 @@ import android.view.SurfaceView
 
 open class VisualizerSurfaceView : SurfaceView, SurfaceHolder.Callback, Runnable {
 
-    val paint = Paint()
-    val STROKE_WIDTH = 10F
-    val SUPPRESS = 256
-    var surfaceHolder: SurfaceHolder
-    var thread: Thread? = null
-    var allBuffer: Queue<Short> = Queue()
-    var buffer: ShortArray = ShortArray(0)
+    private val paint = Paint()
+    private val STROKE_WIDTH = 10F
+    private val SUPPRESS = 256
+    private var surfaceHolder: SurfaceHolder
+    private var thread: Thread? = null
+    private var allBuffer: Queue<Short> = Queue()
+    private var buffer: ShortArray = ShortArray(0)
 
     override fun run() {
         while(thread != null){
-            doDraw(surfaceHolder)
+            doDrawSurface(surfaceHolder)
         }
     }
 
@@ -44,30 +44,29 @@ open class VisualizerSurfaceView : SurfaceView, SurfaceHolder.Callback, Runnable
         }
     }
     //onResumeが呼ばれたときに呼ばれる
-    //threadの開始はここに書いといたほうが良いらしい
     override fun surfaceChanged(tmp_holder: SurfaceHolder?, format: Int, width: Int, height: Int) {
-        thread = Thread(this)
-        thread?.start()
+        startDrawSurfaceThreed()
     }
 
     override fun surfaceDestroyed(holder: SurfaceHolder?) {
-        thread = null
+        stopDrawSurfaceThread()
     }
 
-    fun update(new_buffer: ShortArray, size: Int, sec: Int) {
-        buffer = new_buffer.copyOf(size)
-        if(allBuffer.size() >= size * sec){
+    fun update(new_buffer: ShortArray, size: Int) {
+        if(thread != null){
+            buffer = new_buffer.copyOf(size)
             allBuffer.dequeueByMutableList(size)
+            allBuffer.enqueueArray(buffer.toTypedArray())
         }
-        allBuffer.enqueueArray(buffer.toTypedArray())
     }
 
-    fun initializeBuffer(){
+    fun initializeBuffer(size: Int){
         allBuffer.clear()
+        allBuffer.setElement(size,0)
         buffer = ShortArray(0)
     }
 
-    private fun doDraw(tmp_holder: SurfaceHolder) {
+    private fun doDrawSurface(tmp_holder: SurfaceHolder) {
         if(buffer.size == 0){
             return
         }
@@ -92,44 +91,15 @@ open class VisualizerSurfaceView : SurfaceView, SurfaceHolder.Callback, Runnable
             Log.e(this.javaClass.name, "doDraw", e)
         }
     }
-}
 
-class Queue<T: Number>(list: MutableList<T> = mutableListOf()){
-    var items: MutableList<T> = list
+    fun stopDrawSurfaceThread(){
+        thread = null
+    }
 
-    fun isEmpty(): Boolean = items?.isEmpty()
-    fun size(): Int = items?.count()
-    override fun toString() = items?.toString()
-    fun enqueue(element: T){
-        items?.add(element)
-    }
-    fun enqueueArray(element: Array<T>){
-        items?.addAll(element)
-    }
-    fun dequeue(): T?{
-        if(this.isEmpty()) {
-            return null
+    fun startDrawSurfaceThreed(){
+        if(thread == null){
+            thread = Thread(this)
+            thread?.start()
         }
-        else{
-            return items?.removeAt(0)
-        }
-    }
-    fun dequeueByMutableList(size: Int): MutableList<T>?{
-        if(this.isEmpty()){
-            return null
-        }else{
-            val ret: MutableList<T>? = items?.subList(0, size)
-            items?.subList(0, size)?.clear()
-            return ret ?: null
-        }
-    }
-    fun peek(): T{
-        return items?.get(0)
-    }
-    fun getElement(index: Int): T {
-        return items?.get(index)
-    }
-    fun clear(){
-        items?.clear()
     }
 }
