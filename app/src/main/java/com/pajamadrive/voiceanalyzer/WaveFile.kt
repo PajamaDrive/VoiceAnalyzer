@@ -1,16 +1,18 @@
 package com.pajamadrive.voiceanalyzer
 
 import android.content.Context
+import android.os.Environment
+import android.util.Log
 import android.widget.Toast
 import java.io.RandomAccessFile
 import java.io.File
+import java.io.IOException
 
 class WaveFile {
     private val FILESIZE_SEEK: Long = 4
     private val DATASIZE_SEEK: Long = 40
     private var raf: RandomAccessFile? = null //リアルタイム処理なのでランダムアクセスファイルクラスを使用する
     private var recFile: File? = null //録音後の書き込み、読み込みようファイル
-    private var fileName = ""  //録音ファイルのディレクトリのパス
     private val RIFF = byteArrayOf('R'.toByte(), 'I'.toByte(), 'F'.toByte(), 'F'.toByte()) //wavファイルリフチャンクに書き込むチャンクID用
     private var fileSize = 36
     private val WAVE = byteArrayOf('W'.toByte(), 'A'.toByte(), 'V'.toByte(), 'E'.toByte()) //WAV形式でRIFFフォーマットを使用する
@@ -24,19 +26,36 @@ class WaveFile {
     private var bitPerSample: Short = 16 //サンプルあたりのビット数 WAVでは8bitか16ビットが選べる
     private val DATA = byteArrayOf('d'.toByte(), 'a'.toByte(), 't'.toByte(), 'a'.toByte()) //dataチャンク
     private var dataSize = 0 //波形データのバイト数
+    private val isExternalStorageReadable: Boolean
+        get(){
+            val state = Environment.getExternalStorageState()
+            return Environment.MEDIA_MOUNTED == state
+        }
+    private val isExternalStorageWritable: Boolean
+        get(){
+            val state = Environment.getExternalStorageState()
+            return Environment.MEDIA_MOUNTED_READ_ONLY == state || Environment.MEDIA_MOUNTED == state
+        }
 
-    fun createFile(name: String, ch: Short, sr: Int, bps: Short) {
+    fun createFile(dirPath: String, name: String, ch: Short, sr: Int, bps: Short) {
+        //書き込み可能かチェック
+        if(!isExternalStorageWritable)
+            return
 
-        fileName = name + ".wav"
-        recFile = File(fileName)
+        recFile = File(dirPath, name + ".wav")
+        //親ディレクトリが存在しているか確認
+        if(recFile?.parentFile?.exists() == false)
+            recFile?.parentFile?.mkdirs()
+        //同じファイル名が存在しているか確認
         if (recFile?.exists() == true) {
             recFile?.delete()
         }
+        Log.d("debug", recFile?.path)
         chCount = ch
         samplingRate = sr
         bitPerSample = bps
-        bytePerSec = samplingRate * (fmtSize / 8) * chCount
-        blockSize = (fmtSize / 8 * chCount).toShort()
+        bytePerSec = samplingRate * (bps / 8) * chCount
+        blockSize = (bps / 8 * chCount).toShort()
         recFile?.createNewFile()
         raf = RandomAccessFile(recFile, "rw")
 
@@ -55,7 +74,6 @@ class WaveFile {
         raf?.write(littleEndianShort(bitPerSample))
         raf?.write(DATA)
         raf?.write(littleEndianInteger(dataSize))
-
     }
 
     private fun littleEndianInteger(i: Int): ByteArray {
@@ -64,7 +82,8 @@ class WaveFile {
         buffer[1] = (i shr 8).toByte()
         buffer[2] = (i shr 16).toByte()
         buffer[3] = (i shr 24).toByte()
-
+        Log.d("debug", buffer[0].toString())
+        Log.d("int", i.toString())
         return buffer
     }
     // PCMデータを追記するメソッド
@@ -99,6 +118,8 @@ class WaveFile {
         val buffer = ByteArray(2)
         buffer[0] = s.toByte()
         buffer[1] = (s.toInt() shr 8).toByte()
+        Log.d("debug", buffer[0].toString())
+        Log.d("short", s.toString())
         return buffer
 
     }
@@ -122,11 +143,11 @@ class WaveFile {
     // ファイルを閉じる
     fun close(context: Context) {
         raf?.close()
-        Toast.makeText(context, fileName, Toast.LENGTH_LONG).show()
+        Toast.makeText(context, recFile?.name, Toast.LENGTH_LONG).show()
 
     }
 
     fun getFileName(): String{
-        return fileName
+        return recFile?.path ?: "null"
     }
 }

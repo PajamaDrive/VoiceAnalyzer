@@ -17,15 +17,23 @@ import android.widget.Toast
 import android.Manifest.permission.*
 import android.annotation.SuppressLint
 import android.app.AlertDialog
+import android.content.Context
 import android.content.Intent
 import androidx.core.app.ComponentActivity.ExtraData
 import androidx.core.content.ContextCompat.getSystemService
 import android.icu.lang.UCharacter.GraphemeClusterBreak.T
 import android.net.Uri
+import android.os.Build
 import android.os.Environment
+import android.os.storage.StorageManager
 import android.provider.Settings
 import android.util.Log
+import androidx.annotation.RequiresApi
 import androidx.core.app.ActivityCompat
+import java.io.BufferedReader
+import java.io.File
+import java.io.FileReader
+import androidx.core.content.getSystemService as getSystemService1
 
 class MainActivity : AppCompatActivity() {
     private var record: Record? = null
@@ -36,28 +44,20 @@ class MainActivity : AppCompatActivity() {
     private var file: WaveFile? = null
     private val OFFSET = 0
     private val PERMISSION_REQUEST_CODE = 1
-    private val needPermissions = arrayOf(RECORD_AUDIO, WRITE_EXTERNAL_STORAGE)
-    private val isExternalStorageReadable: Boolean
-        get(){
-            val state = Environment.getExternalStorageState()
-            return Environment.MEDIA_MOUNTED == state
-        }
-    private val isExternalStorageWritable: Boolean
-        get(){
-            val state = Environment.getExternalStorageState()
-            return Environment.MEDIA_MOUNTED_READ_ONLY == state || Environment.MEDIA_MOUNTED == state
-        }
-    private val externalDirectoryPath: String
-        get(){
-            return getExternalFilesDir(null)?.path + "/voiceanalyzer"
-        }
-    private val externalFilePath: String
-        get(){
-            return externalDirectoryPath + "/" + fileName
-        }
+    private val needPermissions = arrayOf(RECORD_AUDIO, WRITE_EXTERNAL_STORAGE, READ_EXTERNAL_STORAGE)
     private val fileName: String
         get(){
-            return SimpleDateFormat("yyyy-MM-dd_HH:mm:ss").format(Date())
+            //外部ストレージではファイル名にコロンが使えないらしくそれで数時間手間取った
+            return SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(Date())
+        }
+    private val externalDirectoryPath: String
+        @RequiresApi(Build.VERSION_CODES.KITKAT)
+        get(){
+            val dirPath = getExternalStoragePath()
+            if(dirPath != "") {
+                return getExternalStoragePath()
+            } else
+                return getExternalFilesDir(null)!!.path
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -69,7 +69,7 @@ class MainActivity : AppCompatActivity() {
         visualizer = VisualizerSurfaceView(this, surface)
         permissionCheck = AccessPermissionCheck()
         permissionCheck?.setPermissionExplain(needPermissions, PERMISSION_REQUEST_CODE,
-            arrayOf("このアプリは録音を行うのでマイクの許可が必要です．", "このアプリは録音した音声を保存するためにストレージの許可が必要です．"))
+            arrayOf("このアプリは録音を行うのでマイクの許可が必要です．", "このアプリは録音した音声を保存するためにストレージ書き込みの許可が必要です．", "このアプリは音声を再生するためにストレージ読み込みの許可が必要です．"))
         button = findViewById(R.id.button_record) as Button
         button?.setOnClickListener{
             if(isRecording)
@@ -77,6 +77,84 @@ class MainActivity : AppCompatActivity() {
             else
                 startRecord()
         }
+    }
+
+    fun getExternalStoragePath(): String{
+        var sdCardPath: MutableList<String> = mutableListOf()
+        //Andriod5.0以上はisExternalStorageRemovableが使用可能
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            for(file in getExternalFilesDirs(null)){
+                //SDカード
+                if(Environment.isExternalStorageRemovable(file)){
+                    if(!sdCardPath.contains(file.path))
+                        sdCardPath.add(file.path)
+                }
+            }
+        }
+        //Android4.2~4.4はisExternalStorageRemovableが使用できない
+        else if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1){
+            val storageManager = this.getSystemService(Context.STORAGE_SERVICE) as StorageManager
+            //privateメソッドはgetDeclearMethodとinvokeを使って実行する
+            val getVolumeFunction = storageManager.javaClass.getDeclaredMethod("getVolumeList")
+            val volumeList = getVolumeFunction?.invoke(storageManager) as MutableList<Object>
+            for(volume in volumeList){
+                //volumeのパスを取得
+                val getPathFileFunction = volume?.javaClass.getDeclaredMethod("getPathFile")
+                val file = getPathFileFunction?.invoke(volume) as File
+                val storagePath = file?.absolutePath
+                //取り外し可能か調べる
+                val isRemovableFunction = volume?.javaClass.getDeclaredMethod("isRemovable")
+                val isRemovable = isRemovableFunction?.invoke(volume) as Boolean
+                if(isRemovable == true){
+                    //マウントされているか調べる
+                    //機種によっては/mnt/privateなどが含まれる場合があるらしい
+                    if(isMountedPath(storagePath) == true){
+                        if(!sdCardPath.contains(storagePath))
+                            sdCardPath.add(storagePath + "/Android/data/" + packageName + "/files")
+                    }
+                }
+            }
+            //Android4.4はmkdirsでfilesディレクトリを作成できないっぽいのでfilesディレクトリを作成する必要があるらしい
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT && Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
+                this.getExternalFilesDirs(null);
+            }
+        }
+        //Android4.2以下は知らない
+        else{
+            sdCardPath.add("")
+        }
+        for(file in sdCardPath){
+            Log.d("debug", file)
+        }
+        return sdCardPath[0]
+    }
+
+    fun isMountedPath(filePath: String): Boolean{
+        var isMounted = false
+        var br: BufferedReader? = null
+        val file = File("/proc/mounts")
+        //このファイルがない場合はマウントされていない
+        if(!file.exists())
+            return isMounted
+        try {
+            br = BufferedReader(FileReader(file))
+            var line: String?
+            do{
+                line = br?.readLine()
+                if(line == null)
+                    break
+                if(line.contains(filePath)){
+                    isMounted = true
+                    break
+                }
+
+            }while(true)
+        }
+        finally{
+            br?.close()
+        }
+
+        return isMounted
     }
 
     //端末の戻るボタンを押下した時の処理
@@ -158,7 +236,8 @@ class MainActivity : AppCompatActivity() {
                 chCount,
                 bitPerSample,
                 minBufferSize)
-            file?.createFile(externalFilePath, chCount.toShort(), samplingRate, bitPerSample.toShort())
+            file?.createFile(externalDirectoryPath, fileName, if(chCount == AudioFormat.CHANNEL_IN_MONO) 1 else 2
+                , samplingRate, if(bitPerSample == AudioFormat.ENCODING_PCM_16BIT) 16 else 8)
             visualizer?.startDrawSurfaceThreed()
         }
 
