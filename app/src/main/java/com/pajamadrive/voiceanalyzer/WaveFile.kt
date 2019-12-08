@@ -82,8 +82,6 @@ class WaveFile {
         buffer[1] = (i shr 8).toByte()
         buffer[2] = (i shr 16).toByte()
         buffer[3] = (i shr 24).toByte()
-        Log.d("debug", buffer[0].toString())
-        Log.d("int", i.toString())
         return buffer
     }
     // PCMデータを追記するメソッド
@@ -118,8 +116,6 @@ class WaveFile {
         val buffer = ByteArray(2)
         buffer[0] = s.toByte()
         buffer[1] = (s.toInt() shr 8).toByte()
-        Log.d("debug", buffer[0].toString())
-        Log.d("short", s.toString())
         return buffer
 
     }

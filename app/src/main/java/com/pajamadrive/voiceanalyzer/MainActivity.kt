@@ -7,33 +7,18 @@ import android.media.MediaRecorder
 import android.os.AsyncTask
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
-import android.provider.MediaStore
 import android.view.SurfaceView
 import android.widget.Button
 import kotlinx.android.synthetic.main.activity_main.*
 import java.text.SimpleDateFormat
 import java.util.*
-import android.widget.Toast
 import android.Manifest.permission.*
 import android.annotation.SuppressLint
-import android.app.AlertDialog
-import android.content.Context
 import android.content.Intent
-import androidx.core.app.ComponentActivity.ExtraData
-import androidx.core.content.ContextCompat.getSystemService
-import android.icu.lang.UCharacter.GraphemeClusterBreak.T
 import android.net.Uri
-import android.os.Build
-import android.os.Environment
-import android.os.storage.StorageManager
 import android.provider.Settings
 import android.util.Log
-import androidx.annotation.RequiresApi
 import androidx.core.app.ActivityCompat
-import java.io.BufferedReader
-import java.io.File
-import java.io.FileReader
-import androidx.core.content.getSystemService as getSystemService1
 
 class MainActivity : AppCompatActivity() {
     private var record: Record? = null
@@ -42,6 +27,7 @@ class MainActivity : AppCompatActivity() {
     private var button: Button? = null
     private var permissionCheck: AccessPermissionCheck? = null
     private var file: WaveFile? = null
+    private var storageCheck: ExternalStorageCheck? = null
     private val OFFSET = 0
     private val PERMISSION_REQUEST_CODE = 1
     private val needPermissions = arrayOf(RECORD_AUDIO, WRITE_EXTERNAL_STORAGE, READ_EXTERNAL_STORAGE)
@@ -51,13 +37,13 @@ class MainActivity : AppCompatActivity() {
             return SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(Date())
         }
     private val externalDirectoryPath: String
-        @RequiresApi(Build.VERSION_CODES.KITKAT)
         get(){
-            val dirPath = getExternalStoragePath()
-            if(dirPath != "") {
-                return getExternalStoragePath()
-            } else
-                return getExternalFilesDir(null)!!.path
+            val dirPath = storageCheck?.getExternalStoragePath()
+            if(dirPath != null) {
+                if (dirPath != "")
+                    return dirPath
+            }
+            return getExternalFilesDir(null)!!.path
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -66,6 +52,7 @@ class MainActivity : AppCompatActivity() {
 
         val surface = findViewById(R.id.visualizer) as SurfaceView
         file = WaveFile()
+        storageCheck = ExternalStorageCheck(this)
         visualizer = VisualizerSurfaceView(this, surface)
         permissionCheck = AccessPermissionCheck()
         permissionCheck?.setPermissionExplain(needPermissions, PERMISSION_REQUEST_CODE,
@@ -77,84 +64,6 @@ class MainActivity : AppCompatActivity() {
             else
                 startRecord()
         }
-    }
-
-    fun getExternalStoragePath(): String{
-        var sdCardPath: MutableList<String> = mutableListOf()
-        //Andriod5.0以上はisExternalStorageRemovableが使用可能
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            for(file in getExternalFilesDirs(null)){
-                //SDカード
-                if(Environment.isExternalStorageRemovable(file)){
-                    if(!sdCardPath.contains(file.path))
-                        sdCardPath.add(file.path)
-                }
-            }
-        }
-        //Android4.2~4.4はisExternalStorageRemovableが使用できない
-        else if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1){
-            val storageManager = this.getSystemService(Context.STORAGE_SERVICE) as StorageManager
-            //privateメソッドはgetDeclearMethodとinvokeを使って実行する
-            val getVolumeFunction = storageManager.javaClass.getDeclaredMethod("getVolumeList")
-            val volumeList = getVolumeFunction?.invoke(storageManager) as MutableList<Object>
-            for(volume in volumeList){
-                //volumeのパスを取得
-                val getPathFileFunction = volume?.javaClass.getDeclaredMethod("getPathFile")
-                val file = getPathFileFunction?.invoke(volume) as File
-                val storagePath = file?.absolutePath
-                //取り外し可能か調べる
-                val isRemovableFunction = volume?.javaClass.getDeclaredMethod("isRemovable")
-                val isRemovable = isRemovableFunction?.invoke(volume) as Boolean
-                if(isRemovable == true){
-                    //マウントされているか調べる
-                    //機種によっては/mnt/privateなどが含まれる場合があるらしい
-                    if(isMountedPath(storagePath) == true){
-                        if(!sdCardPath.contains(storagePath))
-                            sdCardPath.add(storagePath + "/Android/data/" + packageName + "/files")
-                    }
-                }
-            }
-            //Android4.4はmkdirsでfilesディレクトリを作成できないっぽいのでfilesディレクトリを作成する必要があるらしい
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT && Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
-                this.getExternalFilesDirs(null);
-            }
-        }
-        //Android4.2以下は知らない
-        else{
-            sdCardPath.add("")
-        }
-        for(file in sdCardPath){
-            Log.d("debug", file)
-        }
-        return sdCardPath[0]
-    }
-
-    fun isMountedPath(filePath: String): Boolean{
-        var isMounted = false
-        var br: BufferedReader? = null
-        val file = File("/proc/mounts")
-        //このファイルがない場合はマウントされていない
-        if(!file.exists())
-            return isMounted
-        try {
-            br = BufferedReader(FileReader(file))
-            var line: String?
-            do{
-                line = br?.readLine()
-                if(line == null)
-                    break
-                if(line.contains(filePath)){
-                    isMounted = true
-                    break
-                }
-
-            }while(true)
-        }
-        finally{
-            br?.close()
-        }
-
-        return isMounted
     }
 
     //端末の戻るボタンを押下した時の処理
@@ -193,29 +102,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
-
-        permissionCheck?.requestPermissionsResult(this, packageName, requestCode, permissions, grantResults)
-        val deniedPermissions = permissionCheck?.getPermissionStringThatStateEqualDENIED() ?: arrayOf()
-        if(permissionCheck?.containNeverDenied() == true){
-            AlertDialog.Builder(this).setTitle("パーミッションエラー").setMessage("\"今後は許可しない\"が選択されました．アプリ情報の許可をチェックしてください．")
-                .setPositiveButton("OK", {dialig, which -> openSettings()}).show()
-        }
-        permissionCheck?.showPermissionRationale(this, deniedPermissions)
-        if(deniedPermissions.isNotEmpty()){
-            sizeView.text = deniedPermissions[0]
-            AlertDialog.Builder(this).setTitle("パーミッションエラー").setMessage("機器にアクセスする許可がないため録音を開始できません．")
-                .setPositiveButton("OK", {dialig, which -> }).show()
-        }
-    }
-
-    fun openSettings(){
-        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-        intent.setData(Uri.fromParts("package", packageName, null))
-        startActivity(intent)
+        permissionCheck?.requestPermissionsResult(this, {startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).setData(Uri.fromParts("package", packageName, null)))}
+            , {->}, packageName, requestCode, permissions, grantResults)
     }
 
     inner class Record : AsyncTask<Void, DoubleArray, Void>() {
         private val samplingRate = 44100
+        private val fftSize = 4096
+        private val resolution = samplingRate.toDouble() / fftSize
         private val INTERVAL = samplingRate / 500
         private val chCount = AudioFormat.CHANNEL_IN_MONO
         private val bitPerSample = AudioFormat.ENCODING_PCM_16BIT
@@ -257,6 +151,7 @@ class MainActivity : AppCompatActivity() {
                     file?.addBigEndianData(buffer)
                     visualizer?.update(buffer.filterIndexed{idx, num -> idx % INTERVAL == 0}.toShortArray(), readSize / INTERVAL)
                     sizeView.text = file?.getFileName()
+                    var fft = FFT4g(fftSize)
                 }
             }
             finally{

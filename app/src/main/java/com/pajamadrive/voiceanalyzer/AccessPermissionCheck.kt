@@ -3,9 +3,13 @@ package com.pajamadrive.voiceanalyzer
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.Settings
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import java.lang.reflect.Method
 
 class AccessPermissionCheck{
     private var permissions: Array<String> = arrayOf()
@@ -60,7 +64,7 @@ class AccessPermissionCheck{
         }
     }
 
-    fun requestPermissionsResult(context: Context, packageName: String, requestCode: Int, _permissions: Array<out String>, grantResults: IntArray){
+    fun requestPermissionsResult(context: Context, neverDeniedFunc: ()->Unit, deniedFunc: ()->Unit, packageName: String, requestCode: Int, _permissions: Array<out String>, grantResults: IntArray){
         for(permission in _permissions) {
             if (requestCode == permissionRequestCode[permission]) {
                 if (grantResults.isNotEmpty() && permissions.indexOf(permission) != -1) {
@@ -85,6 +89,15 @@ class AccessPermissionCheck{
             }
             //リクエストコードが違う
             permissionState[permission] = PermissionState.NEVER_DENIED
+        }
+
+        val deniedPermissions = getPermissionStringThatStateEqualDENIED()
+        if(containNeverDenied() == true){
+            showNeverDeniedMessage(context, neverDeniedFunc)
+        }
+        showPermissionRationale(context, deniedPermissions)
+        if(deniedPermissions.isNotEmpty()){
+            showDeniedMessage(context, deniedFunc)
         }
     }
 
@@ -111,6 +124,16 @@ class AccessPermissionCheck{
 
     fun containNeverDenied(): Boolean{
         return permissionState.filter {  it.value == PermissionState.NEVER_DENIED}.isNotEmpty()
+    }
+
+    fun showNeverDeniedMessage(context: Context, func: ()->Unit){
+        AlertDialog.Builder(context).setTitle("パーミッションエラー").setMessage("\"今後は許可しない\"が選択されました．アプリ情報の許可をチェックしてください．")
+            .setPositiveButton("OK", {dialig, which -> func()}).show()
+    }
+
+    fun showDeniedMessage(context: Context, func: ()->Unit){
+        AlertDialog.Builder(context).setTitle("パーミッションエラー").setMessage("機器にアクセスする許可がないため録音を開始できません．")
+            .setPositiveButton("OK", {dialig, which -> func()}).show()
     }
 
     enum class PermissionState{
