@@ -19,6 +19,10 @@ import android.net.Uri
 import android.provider.Settings
 import android.util.Log
 import androidx.core.app.ActivityCompat
+import java.lang.Math.pow
+import kotlin.math.log10
+import kotlin.math.pow
+import kotlin.math.sqrt
 
 class MainActivity : AppCompatActivity() {
     private var record: Record? = null
@@ -91,7 +95,6 @@ class MainActivity : AppCompatActivity() {
             isRecording = true
             button?.text = getString(R.string.button_stop_text)
             record = Record()
-            record?.initRecord()
             record?.execute()
         }
         // ユーザーはパーミッションを許可していない
@@ -106,24 +109,31 @@ class MainActivity : AppCompatActivity() {
             , {->}, packageName, requestCode, permissions, grantResults)
     }
 
+
     inner class Record : AsyncTask<Void, DoubleArray, Void>() {
         private val samplingRate = 44100
+        //1回のFFTで使用する標本数
+        //4096 / 44100 = 約0.1秒でFFTを1回行う
         private val fftSize = 4096
+        //分解能(認識できる最小周波数)
+        //44100 / 4096 = 約11hz
+        //mid1C以下は正確に計測できる保証はない
         private val resolution = samplingRate.toDouble() / fftSize
-        private val INTERVAL = samplingRate / 500
+        private val dbBaseLine = pow(2.0, 15.0) * fftSize * sqrt(2.0)
+        private val INTERVAL = samplingRate / 300
         private val chCount = AudioFormat.CHANNEL_IN_MONO
         private val bitPerSample = AudioFormat.ENCODING_PCM_16BIT
         private val minBufferSize = AudioRecord.getMinBufferSize(
             samplingRate,
             chCount,
-            bitPerSample)
+            bitPerSample) * 2
         private val sec = 2
         private var buffer = ShortArray(0)
         private var audioRecord: AudioRecord? = null
 
-        fun initRecord(){
+        init{
             visualizer?.initializeBuffer(samplingRate * sec / INTERVAL)
-            buffer = ShortArray(minBufferSize / 2)
+            buffer = ShortArray(minBufferSize)
             audioRecord = AudioRecord(
                 MediaRecorder.AudioSource.MIC,
                 samplingRate,
@@ -138,10 +148,11 @@ class MainActivity : AppCompatActivity() {
         @SuppressLint("WrongThread")
         override fun doInBackground(vararg params: Void): Void?{
             audioRecord?.startRecording()
-
             try{
                 while(isRecording){
-                    val readSize = audioRecord?.read(buffer, OFFSET, minBufferSize / 2) ?: -1
+                    //byteArrayとかを使用するとリトルエンディアンのデータ(raw形式)が返ってくるっぽい
+                    //shortArrayだと普通にビッグエンディアンで格納される
+                    val readSize = audioRecord?.read(buffer, OFFSET, buffer.size) ?: -1
                     if(readSize < 0){
                         break
                     }
@@ -149,9 +160,18 @@ class MainActivity : AppCompatActivity() {
                         continue
                     }
                     file?.addBigEndianData(buffer)
-                    visualizer?.update(buffer.filterIndexed{idx, num -> idx % INTERVAL == 0}.toShortArray(), readSize / INTERVAL)
-                    sizeView.text = file?.getFileName()
+
+                    val bigEndianDoubleBuffer = buffer.map{it.toDouble()}.toDoubleArray().copyOfRange(0, fftSize)
+                    visualizer?.update(buffer.filterIndexed{idx, value -> idx % INTERVAL == 0}.toShortArray(), readSize / INTERVAL)
                     var fft = FFT4g(fftSize)
+                    fft.rdft(1, bigEndianDoubleBuffer)
+                    val fftData = bigEndianDoubleBuffer.asList().chunked(2)
+                        .map { (left, right) -> 20 * log10(sqrt(left.pow(2) + right.pow(2)) / dbBaseLine) }
+                    val maxDB = fftData.max()
+                    val maxIndex = fftData.indexOf(maxDB)
+                    val pitch = VocalRange(maxIndex * resolution)
+                    sizeView.text = (maxIndex * resolution).toString() + "Hz  " + pitch.getOctaveName()
+                    sizeView.setTextColor(pitch.getPitchColor())
                 }
             }
             finally{

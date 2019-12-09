@@ -140,7 +140,6 @@ class WaveFile {
     fun close(context: Context) {
         raf?.close()
         Toast.makeText(context, recFile?.name, Toast.LENGTH_LONG).show()
-
     }
 
     fun getFileName(): String{
