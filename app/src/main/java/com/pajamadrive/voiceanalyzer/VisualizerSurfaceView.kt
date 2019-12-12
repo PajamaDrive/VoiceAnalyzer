@@ -25,10 +25,8 @@ open class VisualizerSurfaceView : SurfaceView, SurfaceHolder.Callback, Runnable
     }
 
     constructor(context: Context, surface: SurfaceView) : super(context) {
-
         surfaceHolder = surface.holder
         surfaceHolder.addCallback(this)
-
         // 線の太さ、アンチエイリアス、色、とか
         paint.strokeWidth  = STROKE_WIDTH
         paint.isAntiAlias  = true
@@ -36,15 +34,15 @@ open class VisualizerSurfaceView : SurfaceView, SurfaceHolder.Callback, Runnable
     }
 
     //surfaceが作られたときに呼ばれる
-    override fun surfaceCreated(tmp_holder: SurfaceHolder?) {
-        if(tmp_holder != null){
+    override fun surfaceCreated(holder: SurfaceHolder?) {
+        if(holder != null){
             //排他処理
-            val canvas = tmp_holder.lockCanvas()
-            tmp_holder.unlockCanvasAndPost(canvas)
+            val canvas = holder.lockCanvas()
+            holder.unlockCanvasAndPost(canvas)
         }
     }
     //onResumeが呼ばれたときに呼ばれる
-    override fun surfaceChanged(tmp_holder: SurfaceHolder?, format: Int, width: Int, height: Int) {
+    override fun surfaceChanged(holder: SurfaceHolder?, format: Int, width: Int, height: Int) {
         startDrawSurfaceThreed()
     }
 
@@ -52,9 +50,9 @@ open class VisualizerSurfaceView : SurfaceView, SurfaceHolder.Callback, Runnable
         stopDrawSurfaceThread()
     }
 
-    fun update(new_buffer: ShortArray, size: Int) {
+    fun update(buffer: ShortArray, size: Int) {
         if(thread != null){
-            buffer = new_buffer.copyOf(size)
+            this.buffer = buffer.copyOf(size)
             allBuffer.dequeueByMutableList(size)
             allBuffer.enqueueArray(buffer.toTypedArray())
         }
@@ -66,12 +64,12 @@ open class VisualizerSurfaceView : SurfaceView, SurfaceHolder.Callback, Runnable
         buffer = ShortArray(0)
     }
 
-    private fun doDrawSurface(tmp_holder: SurfaceHolder) {
+    private fun doDrawSurface(holder: SurfaceHolder) {
         if(buffer.size == 0){
             return
         }
         try {
-            val canvas: Canvas = tmp_holder.lockCanvas()
+            val canvas: Canvas = holder.lockCanvas()
             if (canvas != null) {
                 canvas.drawColor(Color.BLACK)
                 val baseLine: Float = canvas.height / 2F
@@ -85,7 +83,7 @@ open class VisualizerSurfaceView : SurfaceView, SurfaceHolder.Callback, Runnable
                     oldY = y
                 }
                 buffer = ShortArray(0)
-                tmp_holder.unlockCanvasAndPost(canvas)
+                holder.unlockCanvasAndPost(canvas)
             }
         }catch(e: Exception){
             Log.e(this.javaClass.name, "doDraw", e)

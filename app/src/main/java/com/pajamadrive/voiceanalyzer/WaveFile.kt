@@ -135,7 +135,6 @@ class WaveFile {
         return buffer
     }
 
-
     // ファイルを閉じる
     fun close(context: Context) {
         raf?.close()

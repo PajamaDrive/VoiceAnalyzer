@@ -11,7 +11,7 @@ import java.io.FileReader
 
 class ExternalStorageCheck(val context: Context){
 
-    fun getExternalStoragePath(): String{
+    fun getExternalStorageBaseDir(): String{
         var sdCardPath: MutableList<String> = mutableListOf()
         if(context == null)
             return ""
@@ -27,10 +27,10 @@ class ExternalStorageCheck(val context: Context){
         }
         //Android4.2~4.4はisExternalStorageRemovableが使用できない
         else if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1){
-            val storageManager = context.getSystemService(Context.STORAGE_SERVICE) as StorageManager
+            val sm = context.getSystemService(Context.STORAGE_SERVICE) as StorageManager
             //privateメソッドはgetDeclearMethodとinvokeを使って実行する
-            val getVolumeFunction = storageManager.javaClass.getDeclaredMethod("getVolumeList")
-            val volumeList = getVolumeFunction?.invoke(storageManager) as MutableList<Object>
+            val getVolumeFunction = sm.javaClass.getDeclaredMethod("getVolumeList")
+            val volumeList = getVolumeFunction?.invoke(sm) as MutableList<Object>
             for(volume in volumeList){
                 //volumeのパスを取得
                 val getPathFileFunction = volume?.javaClass.getDeclaredMethod("getPathFile")
@@ -49,16 +49,12 @@ class ExternalStorageCheck(val context: Context){
                 }
             }
             //Android4.4はmkdirsでfilesディレクトリを作成できないっぽいのでfilesディレクトリを作成する必要があるらしい
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT && Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT && Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP)
                 context.getExternalFilesDirs(null);
-            }
         }
         //Android4.2以下は知らない
         else{
             sdCardPath.add("")
-        }
-        for(file in sdCardPath){
-            Log.d("debug", file)
         }
         return sdCardPath[0]
     }
@@ -81,13 +77,11 @@ class ExternalStorageCheck(val context: Context){
                     isMounted = true
                     break
                 }
-
             }while(true)
         }
         finally{
             br?.close()
         }
-
         return isMounted
     }
 }

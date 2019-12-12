@@ -1,26 +1,25 @@
 package com.pajamadrive.voiceanalyzer
 
-import android.media.AudioFormat
-import android.media.AudioRecord
-import android.media.MediaRecorder
 import android.os.AsyncTask
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
-import android.widget.Button
 import java.text.SimpleDateFormat
 import java.util.*
 import android.Manifest.permission.*
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.media.*
 import android.net.Uri
+import android.os.Build
+import android.provider.MediaStore
 import android.provider.Settings
 import android.util.Log
 import android.view.SurfaceView
 import android.view.View
-import android.widget.TextView
-import android.widget.Toast
+import android.widget.*
 import androidx.core.app.ActivityCompat
 import androidx.viewpager.widget.ViewPager
+import java.io.File
 import java.lang.Math.pow
 import kotlin.math.log10
 import kotlin.math.pow
@@ -40,7 +39,9 @@ class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
     private var df: DisplayFileFragment? = null
     private var fc: FragmentCheck? = null
     private var thread: Thread? = null
-    private val OFFSET = 0
+    private var fileStringList:Array<String>? = null
+    private var listView: ListView? = null
+    private var mediaPlayer: MediaPlayer? = null
     private val PERMISSION_REQUEST_CODE = 1
     private val needPermissions = arrayOf(RECORD_AUDIO, WRITE_EXTERNAL_STORAGE, READ_EXTERNAL_STORAGE)
     private val fileName: String
@@ -50,7 +51,7 @@ class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
         }
     private val externalDirectoryPath: String
         get(){
-            val dirPath = storageCheck?.getExternalStoragePath()
+            val dirPath = storageCheck?.getExternalStorageBaseDir()
             if(dirPath != null)
                 if (dirPath != "")
                     return dirPath
@@ -94,6 +95,29 @@ class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
             else
                 startRecord()
         }
+        listView = df?.getListView()
+        fileStringList = File(externalDirectoryPath).listFiles().map{it.name}.toTypedArray()
+        val adapter = ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, fileStringList!!)
+        listView?.adapter = adapter
+        var clickFile: String? = null
+        listView?.setOnItemClickListener{
+            adapterView, view, position, id ->
+            mediaPlayer?.stop()
+            clickFile = externalDirectoryPath + "/" + fileStringList!![position]
+            mediaPlayer = MediaPlayer()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                mediaPlayer?.setAudioAttributes(AudioAttributes.Builder().setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build())
+            }
+            else{
+                mediaPlayer?.setAudioStreamType(AudioAttributes.CONTENT_TYPE_MUSIC)
+            }
+            Log.d("debug", clickFile)
+            val uri = Uri.fromFile(File(clickFile))
+            mediaPlayer?.setDataSource(this, uri)
+            mediaPlayer?.prepare()
+            mediaPlayer?.start()
+        }
+
     }
 
     //端末の戻るボタンを押下した時の処理
@@ -169,7 +193,7 @@ class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
                 while(isRecording){
                     //byteArrayとかを使用するとリトルエンディアンのデータ(raw形式)が返ってくるっぽい
                     //shortArrayだと普通にビッグエンディアンで格納される
-                    val readSize = audioRecord?.read(buffer, OFFSET, buffer.size) ?: -1
+                    val readSize = audioRecord?.read(buffer, 0, buffer.size) ?: -1
                     if(readSize < 0)
                         break
                     if(readSize == 0)

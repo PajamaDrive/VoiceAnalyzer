@@ -24,11 +24,11 @@ class AccessPermissionCheck{
         }
     }
 
-    fun setPermissionExplain(_permissions: Array<String>, requestCode: Int, explains: Array<String>){
-        for(index in 0..(_permissions.size - 1)) {
-            permissions += _permissions[index]
-            permissionRequestCode[_permissions[index]] = requestCode
-            permissionExplain[_permissions[index]] = explains[index]
+    fun setPermissionExplain(permissions: Array<String>, requestCode: Int, explains: Array<String>){
+        for(index in 0..(permissions.size - 1)) {
+            this.permissions += permissions[index]
+            permissionRequestCode[permissions[index]] = requestCode
+            permissionExplain[permissions[index]] = explains[index]
         }
     }
 
@@ -55,8 +55,8 @@ class AccessPermissionCheck{
         }
     }
 
-    fun showPermissionRationale(context: Context, _permissions: Array<String>){
-        for(permission in _permissions) {
+    fun showPermissionRationale(context: Context, permissions: Array<String>){
+        for(permission in permissions) {
             if (ActivityCompat.shouldShowRequestPermissionRationale(context as Activity, permission)) {
                 AlertDialog.Builder(context).setTitle("パーミッションの説明").setMessage(permissionExplain[permission])
                     .setPositiveButton("OK", { dialig, which -> }).show()
@@ -64,19 +64,17 @@ class AccessPermissionCheck{
         }
     }
 
-    fun requestPermissionsResult(context: Context, neverDeniedFunc: ()->Unit, deniedFunc: ()->Unit, packageName: String, requestCode: Int, _permissions: Array<out String>, grantResults: IntArray){
-        for(permission in _permissions) {
+    fun requestPermissionsResult(context: Context, neverDeniedFunc: ()->Unit, deniedFunc: ()->Unit, packageName: String, requestCode: Int, permissions: Array<out String>, grantResults: IntArray){
+        for(permission in permissions) {
             if (requestCode == permissionRequestCode[permission]) {
                 if (grantResults.isNotEmpty() && permissions.indexOf(permission) != -1) {
                     //パーミッションが許可されていない
-                    if (grantResults[_permissions.indexOf(permission)] != PackageManager.PERMISSION_GRANTED) {
-                        if (ActivityCompat.shouldShowRequestPermissionRationale(context as Activity, permission)){
+                    if (grantResults[permissions.indexOf(permission)] != PackageManager.PERMISSION_GRANTED) {
+                        if (ActivityCompat.shouldShowRequestPermissionRationale(context as Activity, permission))
                             permissionState[permission] = PermissionState.DENIED
-                        }
                         //今後も許可しない場合
-                        else{
+                        else
                             permissionState[permission] = PermissionState.NEVER_DENIED
-                        }
                         continue
                     }
                     //パーミッションが許可されている
@@ -92,13 +90,11 @@ class AccessPermissionCheck{
         }
 
         val deniedPermissions = getPermissionStringThatStateEqualDENIED()
-        if(containNeverDenied() == true){
+        if(containNeverDenied() == true)
             showNeverDeniedMessage(context, neverDeniedFunc)
-        }
         showPermissionRationale(context, deniedPermissions)
-        if(deniedPermissions.isNotEmpty()){
+        if(deniedPermissions.isNotEmpty())
             showDeniedMessage(context, deniedFunc)
-        }
     }
 
     fun getPermissionString(): Array<String>{
@@ -113,10 +109,10 @@ class AccessPermissionCheck{
         return permissions.filter{permissionState[it] == PermissionState.DENIED}.toTypedArray()
     }
 
-    fun getRequestCode(_permissions: Array<String>): Int{
-        val requestCode = permissionRequestCode[_permissions[0]]
-        for(index in 1..(_permissions.size - 1)){
-            if(permissionRequestCode[_permissions[index]] != requestCode)
+    fun getRequestCode(permissions: Array<String>): Int{
+        val requestCode = permissionRequestCode[permissions[0]]
+        for(index in 1..(permissions.size - 1)){
+            if(permissionRequestCode[permissions[index]] != requestCode)
                 return -1
         }
         return requestCode!!

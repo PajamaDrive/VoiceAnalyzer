@@ -132,17 +132,13 @@ class VocalRange(private val frequency: Double){
         setMostNearPitch()
         var octaveName = ""
         if(isNickName == true) {
-            if(this.octave == 0)
-                octaveName = "lowlow"
-            if(this.octave == 1)
-                octaveName = "low"
-            if(this.octave == 2)
-                octaveName = "mid1"
-            if(this.octave == 3)
-                octaveName = "mid2"
-            if(this.octave >= 4)
-                octaveName = "hi".repeat(this.octave - 3)
-            octaveName += this.pitch.toString()
+            octaveName = when(this.octave){
+                0 -> "lowlow"
+                1 -> "low"
+                2 -> "mid1"
+                3 -> "mid2"
+                else -> "hi".repeat(this.octave - 3)
+            } + this.pitch.toString()
         }
         else{
             octaveName = this.pitch.toString() + this.octave.toString()
