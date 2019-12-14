@@ -11,11 +11,8 @@ import android.content.Intent
 import android.media.*
 import android.net.Uri
 import android.os.Build
-import android.provider.MediaStore
 import android.provider.Settings
 import android.util.Log
-import android.view.SurfaceView
-import android.view.View
 import android.widget.*
 import androidx.core.app.ActivityCompat
 import androidx.viewpager.widget.ViewPager
@@ -29,7 +26,7 @@ class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
     private var record: Record? = null
     private var isRecording = false
     private var visualizer: VisualizerSurfaceView? = null
-    private var button: Button? = null
+    private var button: ImageButton? = null
     private var permissionCheck: AccessPermissionCheck? = null
     private var file: WaveFile? = null
     private var storageCheck: ExternalStorageCheck? = null
@@ -66,7 +63,19 @@ class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
         df = DisplayFileFragment()
         fc = FragmentCheck(arrayOf(vs!!, df!!))
         fc?.setListener(this)
-        viewPager?.setAdapter(FragmetnPagerAdapter(supportFragmentManager, vs!!, df!!))
+        viewPager?.adapter = ExtendFragmentPagerAdapter(supportFragmentManager, arrayOf(vs!!, df!!))
+        viewPager?.addOnPageChangeListener(object: ViewPager.SimpleOnPageChangeListener(){
+            override fun onPageSelected(position: Int) {
+                val pos = viewPager!!.currentItem
+                Log.d("debug", pos.toString())
+                val layout = findViewById(R.id.controlFrame) as LinearLayout
+                layout.removeAllViews()
+                if(pos == 0)
+                    layoutInflater.inflate(R.layout.record_frame, layout)
+                else
+                    layoutInflater.inflate(R.layout.play_frame, layout)
+            }
+        })
         thread = Thread(this)
         thread?.start()
     }
@@ -87,8 +96,8 @@ class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
         permissionCheck?.setPermissionExplain(needPermissions, PERMISSION_REQUEST_CODE,
             arrayOf("このアプリは録音を行うのでマイクの許可が必要です．", "このアプリは録音した音声を保存するためにストレージ書き込みの許可が必要です．", "このアプリは音声を再生するためにストレージ読み込みの許可が必要です．"))
         visualizer = VisualizerSurfaceView(this, surface!!)
-        button = vs?.getRecordButton()
-        sizeView = vs?.getText()
+        button = findViewById(R.id.recordStartaaaButton)
+        //sizeView = vs?.getText()
         button?.setOnClickListener{
             if(isRecording)
                 stopRecord()
@@ -111,7 +120,6 @@ class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
             else{
                 mediaPlayer?.setAudioStreamType(AudioAttributes.CONTENT_TYPE_MUSIC)
             }
-            Log.d("debug", clickFile)
             val uri = Uri.fromFile(File(clickFile))
             mediaPlayer?.setDataSource(this, uri)
             mediaPlayer?.prepare()
@@ -134,7 +142,7 @@ class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
 
     fun stopRecord(){
         isRecording = false
-        button?.text = getString(R.string.button_record_text)
+        //button?.text = getString(R.string.button_record_text)
         record?.cancel(true)
         file?.close(applicationContext)
     }
@@ -142,10 +150,11 @@ class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
     fun startRecord(){
         // すでにユーザーがパーミッションを許可
         if (permissionCheck?.checkAllPermissions(this) == true){
-            isRecording = true
-            button?.text = getString(R.string.button_stop_text)
-            record = Record()
-            record?.execute()
+            //isRecording = true
+            //button?.text = getString(R.string.button_stop_text)
+            //record = Record()
+            //record?.execute()
+            Log.d("debug", viewPager!!.currentItem.toString())
         }
         // ユーザーはパーミッションを許可していない
         else if(permissionCheck?.checkAllPermissions(this) == false){

@@ -16,11 +16,13 @@ class VisualizeSurfaceFragment: FragmentBase(){
         super.onCreateView(inflater, container, savedInstanceState)
         rootView = inflater.inflate(R.layout.visualize_surface, container, false)
         createdMarker()
-        Log.d("view", rootView.toString())
         return rootView
     }
 
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        Log.d("aaa", "hogehoge")
+    }
+
     fun getSurface(): SurfaceView = ((rootView!! as ViewGroup).getChildAt(0) as ViewGroup).getChildAt(0) as SurfaceView
-    fun getRecordButton(): Button = (((rootView!! as ViewGroup).getChildAt(0) as ViewGroup).getChildAt(1) as ViewGroup).getChildAt(1) as Button
-    fun getText(): TextView = (((rootView!! as ViewGroup).getChildAt(0) as ViewGroup).getChildAt(1) as ViewGroup).getChildAt(0) as TextView
 }

@@ -7,13 +7,87 @@
         android:layout_height="match_parent"
         tools:context=".MainActivity">
 
-    <androidx.viewpager.widget.ViewPager
-            android:id="@+id/pageView"
-            android:layout_width="472dp"
-            android:layout_height="791dp"
+    <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent">
-    </androidx.viewpager.widget.ViewPager>
+
+        <androidx.viewpager.widget.ViewPager
+                android:id="@+id/pageView"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_weight="1">
+
+        </androidx.viewpager.widget.ViewPager>
+
+        <LinearLayout
+                android:id="@+id/controlFrame"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_weight="3"
+                android:orientation="vertical">
+
+            <TextView
+                    android:id="@+id/musicTitleText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:text="TextView"
+                    android:textSize="30sp" />
+
+            <TextView
+                    android:id="@+id/pitchText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:text="TextView"
+                    android:textSize="24sp" />
+
+            <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                <TextView
+                        android:id="@+id/musicCurrentTimeText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:gravity="center"
+                        android:text="TextView"
+                        android:textSize="18sp" />
+
+            </LinearLayout>
+
+            <RelativeLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+
+                <ImageButton
+                        android:id="@+id/recordStartaaaButton"
+                        android:layout_width="70dp"
+                        android:layout_height="70dp"
+                        android:layout_centerInParent="true"
+                        android:scaleType="fitCenter"
+                        android:src="@android:drawable/ic_btn_speak_now" />
+
+                <ImageButton
+                        android:id="@+id/recordPauseButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="20dp"
+                        android:layout_toEndOf="@+id/recordStartButton"
+                        android:layout_toRightOf="@+id/recordStartButton"
+                        app:srcCompat="@android:drawable/ic_media_pause" />
+
+            </RelativeLayout>
+
+        </LinearLayout>
+
+    </LinearLayout>
+
 </androidx.constraintlayout.widget.ConstraintLayout>
