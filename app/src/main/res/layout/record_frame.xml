@@ -5,6 +5,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_weight="3"
+        android:background="#ebebeb"
         android:orientation="vertical">
 
     <TextView
@@ -12,7 +13,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center"
-            android:text="TextView"
+            android:text="@string/emptyString"
             android:textSize="30sp" />
 
     <TextView
@@ -20,7 +21,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center"
-            android:text="TextView"
+            android:text="@string/emptyString"
             android:textSize="24sp" />
 
     <LinearLayout
@@ -34,7 +35,7 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:gravity="center"
-                android:text="TextView"
+                android:text="@string/emptyString"
                 android:textSize="18sp" />
 
     </LinearLayout>
@@ -48,8 +49,10 @@
                 android:layout_width="70dp"
                 android:layout_height="70dp"
                 android:layout_centerInParent="true"
+                android:layout_marginTop="10dp"
+                android:background="@android:color/transparent"
                 android:scaleType="fitCenter"
-                android:src="@android:drawable/ic_btn_speak_now" />
+                android:src="@drawable/record_icon" />
 
         <ImageButton
                 android:id="@+id/recordPauseButton"
@@ -61,6 +64,17 @@
                 android:layout_toRightOf="@+id/recordStartButton"
                 android:visibility="invisible"
                 app:srcCompat="@android:drawable/ic_media_pause" />
+
+        <Switch
+                android:id="@+id/recordableSwitch"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_centerVertical="true"
+                android:layout_marginEnd="20dp"
+                android:layout_toStartOf="@+id/recordStartButton"
+                android:layout_toLeftOf="@+id/recordStartButton"
+                android:text="@string/recordSwitchText"
+                android:textSize="14sp" />
 
     </RelativeLayout>
 

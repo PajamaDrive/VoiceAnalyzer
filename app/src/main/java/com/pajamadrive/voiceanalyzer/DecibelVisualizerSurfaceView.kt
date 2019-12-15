@@ -7,15 +7,16 @@ import android.graphics.Paint
 import android.util.Log
 import android.view.SurfaceHolder
 import android.view.SurfaceView
+import java.lang.Math.pow
+import kotlin.math.log10
 
-open class VisualizerSurfaceView : SurfaceView, SurfaceHolder.Callback, Runnable {
+open class DecibelVisualizerSurfaceView : SurfaceView, SurfaceHolder.Callback, Runnable {
 
     private val paint = Paint()
     private val STROKE_WIDTH = 10F
     private val SUPPRESS = 256
     private var surfaceHolder: SurfaceHolder
     private var thread: Thread? = null
-    private var allBuffer: Queue<Double> = Queue()
     private var buffer = DoubleArray(0)
 
     override fun run() {
@@ -53,14 +54,10 @@ open class VisualizerSurfaceView : SurfaceView, SurfaceHolder.Callback, Runnable
     fun update(buffer: DoubleArray, size: Int) {
         if(thread != null){
             this.buffer = buffer.copyOf(size)
-            allBuffer.dequeueByMutableList(size)
-            allBuffer.enqueueArray(buffer.toTypedArray())
         }
     }
 
     fun initializeBuffer(size: Int){
-        allBuffer.clear()
-        allBuffer.setElement(size,0.0)
         buffer = DoubleArray(0)
     }
 
@@ -72,12 +69,11 @@ open class VisualizerSurfaceView : SurfaceView, SurfaceHolder.Callback, Runnable
             val canvas: Canvas = holder.lockCanvas()
             if (canvas != null) {
                 canvas.drawColor(Color.BLACK)
-                val baseLine: Float = canvas.height / 2F
                 var oldX: Float = 0F
-                var oldY: Float = baseLine
-                for (index in 0..(allBuffer.size() - 1)) {
-                    val x: Float = canvas.width.toFloat() / allBuffer.size().toFloat() * index.toFloat()
-                    val y: Float = (allBuffer.getElement(index) + baseLine).toFloat()
+                var oldY: Float = (this.buffer[0].toFloat() / -120F) * canvas.height.toFloat()
+                for (index in 1..(this.buffer.size - 1)) {
+                    val x: Float = (log10( (100F - 10F) / this.buffer.size * index.toFloat() + 10) - 1) * canvas.width.toFloat()
+                    val y: Float = (this.buffer[index].toFloat() / -120F) * canvas.height.toFloat()
                     canvas.drawLine(oldX, oldY, x, y, paint)
                     oldX = x
                     oldY = y

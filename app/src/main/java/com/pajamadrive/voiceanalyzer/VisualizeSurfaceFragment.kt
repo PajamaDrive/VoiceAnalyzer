@@ -19,10 +19,6 @@ class VisualizeSurfaceFragment: FragmentBase(){
         return rootView
     }
 
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
-        Log.d("aaa", "hogehoge")
-    }
-
     fun getSurface(): SurfaceView = ((rootView!! as ViewGroup).getChildAt(0) as ViewGroup).getChildAt(0) as SurfaceView
+    fun getDecSurface(): SurfaceView = ((rootView!! as ViewGroup).getChildAt(0) as ViewGroup).getChildAt(1) as SurfaceView
 }

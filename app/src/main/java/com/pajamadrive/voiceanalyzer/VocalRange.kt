@@ -149,4 +149,12 @@ class VocalRange(private val frequency: Double){
     fun getPitchColor(): Int{
         return this.pitch!!.getColor()
     }
+
+    fun getPitchFrequency(): Double{
+        return this.pitch!!.getFrequency() * this.octave
+    }
+
+    fun getFrequency(): Double{
+        return this.frequency
+    }
 }

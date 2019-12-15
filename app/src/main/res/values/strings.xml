@@ -1,3 +1,13 @@
 <resources>
     <string name="app_name">VoiceAnalyzer</string>
+    <string name="recordSwitchText">ファイル作成</string>
+    <string name="emptyString"></string>
+    <string name="frequency_10">10Hz</string>
+    <string name="frequency_100">100Hz</string>
+    <string name="frequency_1000">1kHz</string>
+    <string name="frequency_10000">10kHz</string>
+    <string name="frequency_44100">44.1kHz</string>
+    <string name="frequency_50">50Hz</string>
+    <string name="frequency_500">500Hz</string>
+    <string name="frequency_5000">5kHz</string>
 </resources>
