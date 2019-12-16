@@ -1,6 +1,6 @@
 package com.pajamadrive.voiceanalyzer
 
-class Queue<T: Number>(list: MutableList<T> = mutableListOf()){
+class Queue<T>(list: MutableList<T> = mutableListOf()){
     private var items: MutableList<T> = list
 
     fun isEmpty(): Boolean = items?.isEmpty()
@@ -10,6 +10,7 @@ class Queue<T: Number>(list: MutableList<T> = mutableListOf()){
     fun enqueueArray(element: Array<T>) = items?.addAll(element)
     fun peek(): T = items?.get(0)
     fun getElement(index: Int): T = items?.get(index)
+    fun getAllElement(): MutableList<T> = items
     fun clear() = items?.clear()
 
     fun dequeue(): T?{

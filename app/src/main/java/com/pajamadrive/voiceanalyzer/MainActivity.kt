@@ -17,15 +17,13 @@ import androidx.core.app.ActivityCompat
 import androidx.viewpager.widget.ViewPager
 import java.io.File
 import java.lang.Math.pow
-import kotlin.math.log10
-import kotlin.math.pow
 import kotlin.math.sqrt
 
 class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
     private var record: Record? = null
     private var isRecording = false
     private var isPlaying = false
-    private var visualizer: VisualizerSurfaceView? = null
+    private var pitchVisualizer: PitchVisualizerSurfaceView? = null
     private var decibelVisualizer: DecibelVisualizerSurfaceView? = null
     private var recordButton: ImageButton? = null
     private var recordPauseButton: ImageButton? = null
@@ -99,7 +97,7 @@ class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
         permissionCheck = AccessPermissionCheck()
         permissionCheck?.setPermissionExplain(needPermissions, PERMISSION_REQUEST_CODE,
             arrayOf("このアプリは録音を行うのでマイクの許可が必要です．", "このアプリは録音した音声を保存するためにストレージ書き込みの許可が必要です．", "このアプリは音声を再生するためにストレージ読み込みの許可が必要です．"))
-        visualizer = VisualizerSurfaceView(this, surface!!)
+        pitchVisualizer = PitchVisualizerSurfaceView(this, surface!!)
         val decSurface = vs?.getDecSurface()
         decibelVisualizer = DecibelVisualizerSurfaceView(this, decSurface!!)
         setRecordFrame()
@@ -209,7 +207,7 @@ class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
     //アクティビティが非表示になった際の処理
     override fun onPause(){
         super.onPause()
-        visualizer?.stopDrawSurfaceThread()
+        pitchVisualizer?.stopDrawSurfaceThread()
         decibelVisualizer?.stopDrawSurfaceThread()
     }
 
@@ -283,7 +281,7 @@ class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
         private val handler = Handler(Looper.getMainLooper())
 
         init{
-            visualizer?.initializeBuffer(samplingRate * sec / INTERVAL)
+            pitchVisualizer?.initializeBuffer(samplingRate / fftSize * sec)
             decibelVisualizer?.initializeBuffer(fftSize / 2)
             buffer = ShortArray(minBufferSize)
             audioRecord = AudioRecord(MediaRecorder.AudioSource.MIC, samplingRate, chCount, bitPerSample, minBufferSize)
@@ -293,7 +291,7 @@ class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
                 )
                 titleText?.text = fileName
             }
-            visualizer?.startDrawSurfaceThreed()
+            pitchVisualizer?.startDrawSurfaceThreed()
             decibelVisualizer?.startDrawSurfaceThreed()
         }
 
@@ -316,8 +314,11 @@ class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
                     //visualizer?.update(buffer.filterIndexed{idx, value -> idx % INTERVAL == 0}.toShortArray(), readSize / INTERVAL)
                     val fft = FFT(samplingRate, buffer.map{it.toDouble()}.toDoubleArray())
                     fft.execute()
-                    handler.post { -> pitchText?.text = fft.getPitch().getOctaveName().toString()}
-                    visualizer?.update(DoubleArray((readSize / INTERVAL),{fft.getPitch().getPitchFrequency()}), readSize / INTERVAL)
+                    handler.post { ->
+                        pitchText?.text = fft.getPitch().getOctaveName()
+                        pitchText?.setTextColor(fft.getPitch().getPitchColor())
+                    }
+                    pitchVisualizer?.update(fft.getPitch())
                     decibelVisualizer?.update(fft.getFFTData(), fftSize / 2)
 /*
                     var fft = FFT4g(fftSize)
