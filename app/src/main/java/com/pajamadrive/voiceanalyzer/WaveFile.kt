@@ -144,4 +144,11 @@ class WaveFile {
     fun getFileName(): String{
         return recFile?.path ?: "null"
     }
+
+    companion object{
+        fun getChCountPosition(): Long = 22
+        fun getSamplingRatePosition(): Long = 24
+        fun getBitPerSamplePosition(): Long = 34
+        fun getHeaderSize(): Int = 44
+    }
 }

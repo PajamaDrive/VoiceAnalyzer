@@ -103,20 +103,26 @@
 
         <ImageButton
                 android:id="@+id/repeatButton"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
                 android:layout_alignParentLeft="true"
                 android:layout_alignParentBottom="false"
+                android:layout_marginLeft="5dp"
                 android:layout_weight="1"
+                android:background="@color/defaultColor"
+                android:padding="5dp"
                 android:scaleType="centerInside"
                 android:src="@drawable/repeat_icon" />
 
         <ImageButton
                 android:id="@+id/shuffleButton"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
                 android:layout_alignParentRight="true"
+                android:layout_marginRight="5dp"
                 android:layout_weight="1"
+                android:background="@color/defaultColor"
+                android:padding="5dp"
                 android:scaleType="centerInside"
                 android:src="@drawable/shuffle_icon" />
 

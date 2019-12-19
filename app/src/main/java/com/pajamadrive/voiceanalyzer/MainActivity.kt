@@ -16,7 +16,13 @@ import android.widget.*
 import androidx.core.app.ActivityCompat
 import androidx.viewpager.widget.ViewPager
 import java.io.File
+import java.io.FileInputStream
+import java.io.RandomAccessFile
 import java.lang.Math.pow
+import kotlin.collections.RandomAccess
+import kotlin.experimental.and
+import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.sqrt
 
 class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
@@ -44,6 +50,8 @@ class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
     private var fileCreateMode: Boolean = false
     private var permissionCheck: AccessPermissionCheck? = null
     private var file: WaveFile? = null
+    private var currentFilePosition: Int = -1
+    private var isShuffle: Boolean = false
     private var storageCheck: ExternalStorageCheck? = null
     private var viewPager: ViewPager? = null
     private var vs: VisualizeSurfaceFragment? = null
@@ -52,7 +60,7 @@ class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
     private var thread: Thread? = null
     private var fileStringList:Array<String>? = null
     private var listView: ListView? = null
-    private var mediaPlayer: MediaPlayer? = null
+    private var audioPlayer: AudioPlayer? = null
     private val PERMISSION_REQUEST_CODE = 1
     private val needPermissions = arrayOf(RECORD_AUDIO, WRITE_EXTERNAL_STORAGE, READ_EXTERNAL_STORAGE)
     private val fileName: String
@@ -105,27 +113,20 @@ class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
         fileStringList = File(externalDirectoryPath).listFiles().map{it.name}.toTypedArray()
         val adapter = ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, fileStringList!!)
         listView?.adapter = adapter
-        var clickFile: String? = null
         listView?.setOnItemClickListener{
             adapterView, view, position, id ->
-            mediaPlayer?.stop()
-            clickFile = externalDirectoryPath + "/" + fileStringList!![position]
-            mediaPlayer = MediaPlayer()
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                mediaPlayer?.setAudioAttributes(AudioAttributes.Builder().setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build())
+            if(audioPlayer?.isPlaying() == true){
+                audioPlayer?.stopAudio()
             }
-            else{
-                mediaPlayer?.setAudioStreamType(AudioAttributes.CONTENT_TYPE_MUSIC)
-            }
-            val uri = Uri.fromFile(File(clickFile))
-            mediaPlayer?.setDataSource(this, uri)
-            mediaPlayer?.prepare()
-            mediaPlayer?.start()
+            currentFilePosition = position
+            val clickFileString = externalDirectoryPath + "/" + fileStringList!![currentFilePosition]
+            audioPlayer = AudioPlayer(clickFileString)
+            audioPlayer?.startAudio()
             val layout = findViewById(R.id.controlFrame) as LinearLayout
             layout.removeAllViews()
             layoutInflater.inflate(R.layout.play_frame, layout)
             setPlayFrame()
-            titleText?.text = fileStringList!![position]
+            titleText?.text = fileStringList!![currentFilePosition]
         }
         viewPager?.addOnPageChangeListener(object: ViewPager.SimpleOnPageChangeListener(){
             override fun onPageSelected(position: Int) {
@@ -194,7 +195,63 @@ class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
             layout.removeAllViews()
             layoutInflater.inflate(R.layout.record_frame, layout)
             setRecordFrame()
-            mediaPlayer?.stop()
+            audioPlayer?.stopAudio()
+        }
+        playButton?.setOnClickListener {
+            if(audioPlayer?.isPlaying() == true) {
+                playButton?.setImageResource(android.R.drawable.ic_media_play)
+                audioPlayer?.pauseAudio()
+            }
+            else{
+                playButton?.setImageResource(android.R.drawable.ic_media_pause)
+                audioPlayer?.unPauseAudio()
+            }
+        }
+        fastForwardButton?.setOnClickListener {
+            audioPlayer?.fastForwardAudio(2)
+        }
+        rewindButton?.setOnClickListener {
+            audioPlayer?.rewindAudio(2)
+        }
+        previousButton?.setOnClickListener {
+            if(audioPlayer?.isPlaying() == true) {
+                audioPlayer?.stopAudio()
+            }
+            currentFilePosition = max(currentFilePosition - 1, 0)
+            val clickFileString = externalDirectoryPath + "/" + fileStringList!![currentFilePosition]
+            audioPlayer = AudioPlayer(clickFileString)
+            audioPlayer?.startAudio()
+            titleText?.text = fileStringList!![currentFilePosition]
+        }
+        nextButton?.setOnClickListener {
+            if(audioPlayer?.isPlaying() == true) {
+                audioPlayer?.stopAudio()
+            }
+            currentFilePosition = min(currentFilePosition + 1, fileStringList!!.size - 1)
+            val clickFileString = externalDirectoryPath + "/" + fileStringList!![currentFilePosition]
+            audioPlayer = AudioPlayer(clickFileString)
+            audioPlayer?.startAudio()
+            titleText?.text = fileStringList!![currentFilePosition]
+        }
+        repeatButton?.setOnClickListener {
+            if(audioPlayer?.getIsLoop() == false){
+                audioPlayer?.setIsLoop(true)
+                repeatButton?.setBackgroundColor(resources.getColor(R.color.availableColor))
+            }
+            else{
+                audioPlayer?.setIsLoop(false)
+                repeatButton?.setBackgroundColor(resources.getColor(R.color.defaultColor))
+            }
+        }
+        shuffleButton?.setOnClickListener {
+            if(isShuffle == false){
+                isShuffle = true
+                shuffleButton?.setBackgroundColor(resources.getColor(R.color.availableColor))
+            }
+            else{
+                isShuffle = false
+                shuffleButton?.setBackgroundColor(resources.getColor(R.color.defaultColor))
+            }
         }
     }
 
