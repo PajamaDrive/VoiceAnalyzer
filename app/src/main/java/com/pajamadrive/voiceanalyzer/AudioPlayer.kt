@@ -13,55 +13,24 @@ import java.io.FileInputStream
 import java.io.RandomAccessFile
 import kotlin.experimental.and
 import kotlin.math.*
+import kotlin.random.Random
 
-class AudioPlayer(val fileName: String): Runnable{
-    var file: File? = null
-    var byteData = ByteArray(0)
-    var bufSize: Int = 0
-    var audioTrack: AudioTrack? = null
-    var audioThread: Thread? = null
-    var samplingRate: Int = 0
-    var chCount: Int = 0
-    var bitPerSample: Int = 0
-    var currentPosition: Int = 0
-    var isLoop: Boolean = false
+class AudioPlayer(private val dirPath: String, private val fileNameList: Array<String>, private val currentFilePosition: Int): Runnable{
+    private var file: File? = null
+    private var byteData = ByteArray(0)
+    private var bufSize: Int = 0
+    private var audioTrack: AudioTrack? = null
+    private var audioThread: Thread? = null
+    private var samplingRate: Int = 0
+    private var chCount: Int = 0
+    private var bitPerSample: Int = 0
+    private var musicSec : Int = 0
+    private var currentTimePosition: Int = 0
+    private var isLoop: Boolean = false
+    private var isShuffle: Boolean = false
 
     init{
-        val chCountBuffer = ByteArray(2)
-        val samplingRateBuffer = ByteArray(4)
-        val bitPerSampleBuffer = ByteArray(2)
-        val headerSize = WaveFile.getHeaderSize()
-        val clickFile = RandomAccessFile(fileName, "r")
-        clickFile.seek(WaveFile.getChCountPosition())
-        clickFile.read(chCountBuffer)
-        clickFile.seek(WaveFile.getSamplingRatePosition())
-        clickFile.read(samplingRateBuffer)
-        clickFile.seek(WaveFile.getBitPerSamplePosition())
-        clickFile.read(bitPerSampleBuffer)
-        chCount = byteArrayToShort(convertEndian(chCountBuffer))
-        samplingRate = byteArrayToInt(convertEndian(samplingRateBuffer))
-        bitPerSample = byteArrayToShort(convertEndian(bitPerSampleBuffer))
-        file = File(fileName)
-        byteData = ByteArray(file!!.length().toInt())
-        var inputStream: FileInputStream? = null
-        try{
-            inputStream = FileInputStream(file)
-            inputStream?.read(byteData)
-        }
-        finally{
-            inputStream?.close()
-        }
-        bufSize = android.media.AudioTrack.getMinBufferSize(samplingRate, if(chCount == 1) AudioFormat.CHANNEL_OUT_MONO else AudioFormat.CHANNEL_OUT_STEREO, if(bitPerSample == 16) AudioFormat.ENCODING_PCM_16BIT else AudioFormat.ENCODING_PCM_8BIT)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            audioTrack = AudioTrack.Builder()
-                .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build())
-                .setAudioFormat(AudioFormat.Builder().setEncoding(if(bitPerSample == 16) AudioFormat.ENCODING_PCM_16BIT else AudioFormat.ENCODING_PCM_8BIT).setSampleRate(samplingRate)
-                    .setChannelMask(if(chCount == 1) AudioFormat.CHANNEL_OUT_MONO else AudioFormat.CHANNEL_OUT_STEREO).build())
-                .setBufferSizeInBytes(bufSize).build()
-        }
-        else{
-            audioTrack = AudioTrack(AudioManager.STREAM_MUSIC, samplingRate, chCount, bitPerSample, bufSize, AudioTrack.MODE_STREAM)
-        }
+        initialize()
     }
 
     fun byteArrayToInt(byteArray: ByteArray): Int {
@@ -85,16 +54,73 @@ class AudioPlayer(val fileName: String): Runnable{
     override fun run() {
         if(audioTrack != null){
             audioTrack?.play()
-            audioTrack?.write(
-                byteData,
-                WaveFile.getHeaderSize() + currentPosition,
-                byteData.size - WaveFile.getHeaderSize() - currentPosition
-            )
+            audioTrack?.write(byteData, WaveFile.getHeaderSize() + currentTimePosition, byteData.size - WaveFile.getHeaderSize() - currentTimePosition)
+            /*
             if (audioTrack?.playState != AudioTrack.PLAYSTATE_STOPPED) {
                 audioTrack?.stop()
                 audioTrack?.flush()
             }
+            */
         }
+    }
+
+    fun initialize(){
+        val chCountBuffer = ByteArray(2)
+        val samplingRateBuffer = ByteArray(4)
+        val bitPerSampleBuffer = ByteArray(2)
+        val musicSizeBuffer = ByteArray(4)
+        val clickFile = RandomAccessFile(dirPath + "/" + fileNameList[currentTimePosition], "r")
+        clickFile.seek(WaveFile.getChCountPosition())
+        clickFile.read(chCountBuffer)
+        clickFile.seek(WaveFile.getSamplingRatePosition())
+        clickFile.read(samplingRateBuffer)
+        clickFile.seek(WaveFile.getBitPerSamplePosition())
+        clickFile.read(bitPerSampleBuffer)
+        clickFile.seek(WaveFile.getDataSizePosition())
+        clickFile.read(musicSizeBuffer)
+        chCount = byteArrayToShort(convertEndian(chCountBuffer))
+        samplingRate = byteArrayToInt(convertEndian(samplingRateBuffer))
+        bitPerSample = byteArrayToShort(convertEndian(bitPerSampleBuffer))
+        musicSec = byteArrayToInt(convertEndian(musicSizeBuffer))
+        file = File(dirPath + "/" + fileNameList[currentFilePosition])
+        byteData = ByteArray(file!!.length().toInt())
+        var inputStream: FileInputStream? = null
+        try{
+            inputStream = FileInputStream(file)
+            inputStream?.read(byteData)
+        }
+        finally{
+            inputStream?.close()
+        }
+        bufSize = android.media.AudioTrack.getMinBufferSize(samplingRate, if(chCount == 1) AudioFormat.CHANNEL_OUT_MONO else AudioFormat.CHANNEL_OUT_STEREO, if(bitPerSample == 16) AudioFormat.ENCODING_PCM_16BIT else AudioFormat.ENCODING_PCM_8BIT)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            audioTrack = AudioTrack.Builder()
+                .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build())
+                .setAudioFormat(AudioFormat.Builder().setEncoding(if(bitPerSample == 16) AudioFormat.ENCODING_PCM_16BIT else AudioFormat.ENCODING_PCM_8BIT).setSampleRate(samplingRate)
+                    .setChannelMask(if(chCount == 1) AudioFormat.CHANNEL_OUT_MONO else AudioFormat.CHANNEL_OUT_STEREO).build())
+                .setBufferSizeInBytes(bufSize).build()
+        }
+        else{
+            audioTrack = AudioTrack(AudioManager.STREAM_MUSIC, samplingRate, chCount, bitPerSample, bufSize, AudioTrack.MODE_STREAM)
+        }
+        audioTrack?.setPlaybackPositionUpdateListener(object: AudioTrack.OnPlaybackPositionUpdateListener{
+            override fun onPeriodicNotification(track: AudioTrack?) {
+            }
+
+            override fun onMarkerReached(track: AudioTrack?) {
+                if(track!!.playState == AudioTrack.PLAYSTATE_PLAYING){
+                    track!!.stop()
+                    track!!.flush()
+                    audioThread = null
+                    if(isLoop)
+                        startAudio()
+                    else if(isShuffle){
+                        currentTimePosition = Random.nextInt(fileNameList.size)
+                        initialize()
+                    }
+                }
+            }
+        })
     }
 
     fun stopAudio(){
@@ -112,7 +138,7 @@ class AudioPlayer(val fileName: String): Runnable{
     }
 
     fun pauseAudio(){
-        currentPosition += audioTrack!!.playbackHeadPosition * (bitPerSample / 8) * chCount
+        currentTimePosition += audioTrack!!.playbackHeadPosition * (bitPerSample / 8) * chCount
         audioTrack?.stop()
         audioTrack?.reloadStaticData()
         audioThread = null
@@ -128,7 +154,7 @@ class AudioPlayer(val fileName: String): Runnable{
     fun fastForwardAudio(sec: Int){
         val unPauseFlag = if(audioTrack?.playState == AudioTrack.PLAYSTATE_PLAYING) true else false
         pauseAudio()
-        currentPosition = min(currentPosition + sec * samplingRate * (bitPerSample / 8) * chCount, byteData.size - WaveFile.getHeaderSize())
+        currentTimePosition = min(currentTimePosition + sec * samplingRate * (bitPerSample / 8) * chCount, byteData.size - WaveFile.getHeaderSize())
         if(unPauseFlag)
             unPauseAudio()
     }
@@ -136,7 +162,7 @@ class AudioPlayer(val fileName: String): Runnable{
     fun rewindAudio(sec: Int){
         val unPauseFlag = if(audioTrack?.playState == AudioTrack.PLAYSTATE_PLAYING) true else false
         pauseAudio()
-        currentPosition = max(currentPosition - sec * samplingRate * (bitPerSample / 8) * chCount, 0)
+        currentTimePosition = max(currentTimePosition - sec * samplingRate * (bitPerSample / 8) * chCount, 0)
         if(unPauseFlag)
             unPauseAudio()
     }
@@ -154,6 +180,17 @@ class AudioPlayer(val fileName: String): Runnable{
         isLoop = element
     }
 
+    fun getIsShuffle(): Boolean = isShuffle
+
+    fun setIsShuffle(element: Boolean){
+        isShuffle = element
+    }
+
+    fun setCurrentTimePosition(element: Int){
+        currentTimePosition = element
+    }
+
+    fun getMusicSec(): Int = musicSec
 
     fun isPlaying(): Boolean = if(audioTrack?.playState == AudioTrack.PLAYSTATE_PLAYING) true else false
 }

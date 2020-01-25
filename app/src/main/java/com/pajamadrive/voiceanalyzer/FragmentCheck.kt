@@ -1,5 +1,7 @@
 package com.pajamadrive.voiceanalyzer
 
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.widget.Toast
 import androidx.fragment.app.Fragment
@@ -15,7 +17,7 @@ class FragmentCheck(val fragments: Array<FragmentBase>) {
     fun checkFragment(){
         if(listener != null){
             //全部のfragmentが作成されたらlistenerを実行
-            if(isAllFragmentCreated() == true) {
+            if (isAllFragmentCreated() == true) {
                 listener?.createListener()
             }
         }
@@ -32,4 +34,5 @@ class FragmentCheck(val fragments: Array<FragmentBase>) {
     fun setListener(listener: FragmentCheckListener){
         this.listener = listener
     }
+
 }

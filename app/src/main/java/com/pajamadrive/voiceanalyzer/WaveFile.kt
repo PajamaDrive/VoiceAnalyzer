@@ -50,7 +50,6 @@ class WaveFile {
         if (recFile?.exists() == true) {
             recFile?.delete()
         }
-        Log.d("debug", recFile?.path)
         chCount = ch
         samplingRate = sr
         bitPerSample = bps
@@ -138,17 +137,18 @@ class WaveFile {
     // ファイルを閉じる
     fun close(context: Context) {
         raf?.close()
-        Toast.makeText(context, recFile?.name, Toast.LENGTH_LONG).show()
+        //Toast.makeText(context, recFile?.name, Toast.LENGTH_LONG).show()
     }
 
     fun getFileName(): String{
-        return recFile?.path ?: "null"
+        return recFile?.name ?: "null"
     }
 
     companion object{
         fun getChCountPosition(): Long = 22
         fun getSamplingRatePosition(): Long = 24
         fun getBitPerSamplePosition(): Long = 34
+        fun getDataSizePosition(): Long = 40
         fun getHeaderSize(): Int = 44
     }
 }

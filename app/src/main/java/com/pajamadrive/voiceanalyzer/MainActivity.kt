@@ -15,12 +15,14 @@ import android.view.View
 import android.widget.*
 import androidx.core.app.ActivityCompat
 import androidx.viewpager.widget.ViewPager
+import kotlinx.coroutines.runBlocking
 import java.io.File
 import java.io.FileInputStream
 import java.io.RandomAccessFile
 import java.lang.Math.pow
 import kotlin.collections.RandomAccess
 import kotlin.experimental.and
+import kotlin.math.log10
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sqrt
@@ -58,9 +60,15 @@ class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
     private var df: DisplayFileFragment? = null
     private var fc: FragmentCheck? = null
     private var thread: Thread? = null
-    private var fileStringList:Array<String>? = null
+    private var fileStringList: MutableList<String>? = null
     private var listView: ListView? = null
+    private var frequencyText1: TextView? = null
+    private var frequencyText2: TextView? = null
+    private var frequencyText3: TextView? = null
+    private var frequencyText4: TextView? = null
     private var audioPlayer: AudioPlayer? = null
+    private var minFrequency = 50
+    private var maxFrequency = 3000
     private val PERMISSION_REQUEST_CODE = 1
     private val needPermissions = arrayOf(RECORD_AUDIO, WRITE_EXTERNAL_STORAGE, READ_EXTERNAL_STORAGE)
     private val fileName: String
@@ -99,35 +107,52 @@ class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
     //fragmentの準備ができたら各種準備
     override fun createListener(){
         thread = null
-        val surface = vs?.getSurface()
         file = WaveFile()
         storageCheck = ExternalStorageCheck(this)
         permissionCheck = AccessPermissionCheck()
         permissionCheck?.setPermissionExplain(needPermissions, PERMISSION_REQUEST_CODE,
             arrayOf("このアプリは録音を行うのでマイクの許可が必要です．", "このアプリは録音した音声を保存するためにストレージ書き込みの許可が必要です．", "このアプリは音声を再生するためにストレージ読み込みの許可が必要です．"))
-        pitchVisualizer = PitchVisualizerSurfaceView(this, surface!!)
+        val surface = vs?.getSurface()
         val decSurface = vs?.getDecSurface()
+        pitchVisualizer = PitchVisualizerSurfaceView(this, surface!!)
         decibelVisualizer = DecibelVisualizerSurfaceView(this, decSurface!!)
+        frequencyText1 = vs?.getFrequencyText1()
+        frequencyText2 = vs?.getFrequencyText2()
+        frequencyText3 = vs?.getFrequencyText3()
+        frequencyText4 = vs?.getFrequencyText4()
+        frequencyText1?.text = minFrequency.toString() + "Hz"
+        frequencyText4?.text = maxFrequency.toString() + "Hz"
+        val logInterval = (log10(maxFrequency.toDouble()) - log10(minFrequency.toDouble())) / 3
+        frequencyText2?.text = pow(10.0, logInterval + log10(minFrequency.toDouble())).toInt().toString() + "Hz"
+        frequencyText3?.text = pow(10.0, logInterval * 2 + log10(minFrequency.toDouble())).toInt().toString() + "Hz"
         setRecordFrame()
         listView = df?.getListView()
-        fileStringList = File(externalDirectoryPath).listFiles().map{it.name}.toTypedArray()
-        val adapter = ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, fileStringList!!)
-        listView?.adapter = adapter
-        listView?.setOnItemClickListener{
-            adapterView, view, position, id ->
-            if(audioPlayer?.isPlaying() == true){
-                audioPlayer?.stopAudio()
+        fileStringList = File(externalDirectoryPath).listFiles().map{it.name}.toMutableList()
+        val adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, fileStringList!!)
+        //別スレッドからUIを操作するとエラーが出るのでhandlerを使用してメインスレッドでviewの更新を行う
+        val handler = Handler(Looper.getMainLooper())
+        handler.post {
+            listView?.adapter = adapter
+            listView?.setOnItemClickListener { adapterView, view, position, id ->
+                if (audioPlayer?.isPlaying() == true) {
+                    audioPlayer?.stopAudio()
+                }
+                currentFilePosition = position
+                val isRecordeFrame = if (audioPlayer == null) true else false
+                //val clickFileString = externalDirectoryPath + "/" + fileStringList!![currentFilePosition]
+                audioPlayer =
+                    AudioPlayer(externalDirectoryPath, fileStringList!!.toTypedArray(), currentFilePosition)
+                audioPlayer?.startAudio()
+                if (isRecordeFrame) {
+                    val layout = findViewById(R.id.controlFrame) as LinearLayout
+                    layout.removeAllViews()
+                    layoutInflater.inflate(R.layout.play_frame, layout)
+                    setPlayFrame()
+                }
+                setMusicDetail()
             }
-            currentFilePosition = position
-            val clickFileString = externalDirectoryPath + "/" + fileStringList!![currentFilePosition]
-            audioPlayer = AudioPlayer(clickFileString)
-            audioPlayer?.startAudio()
-            val layout = findViewById(R.id.controlFrame) as LinearLayout
-            layout.removeAllViews()
-            layoutInflater.inflate(R.layout.play_frame, layout)
-            setPlayFrame()
-            titleText?.text = fileStringList!![currentFilePosition]
         }
+        /*
         viewPager?.addOnPageChangeListener(object: ViewPager.SimpleOnPageChangeListener(){
             override fun onPageSelected(position: Int) {
                 val layout = findViewById(R.id.controlFrame) as LinearLayout
@@ -148,7 +173,9 @@ class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
                  */
             }
         })
+         */
     }
+
 
     fun setRecordFrame(){
         recordButton = findViewById(R.id.recordStartButton)
@@ -190,12 +217,15 @@ class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
         musicSeekBar = findViewById(R.id.musicPlaySeekBar)
         pitchText = findViewById(R.id.pitchText)
         titleText = findViewById(R.id.musicTitleText)
+        currentTimetext = findViewById(R.id.musicCurrentTimeText)
+        musicLengthtext = findViewById(R.id.musicWholeTimeText)
         stopButton?.setOnClickListener {
             val layout = findViewById(R.id.controlFrame) as LinearLayout
             layout.removeAllViews()
             layoutInflater.inflate(R.layout.record_frame, layout)
             setRecordFrame()
             audioPlayer?.stopAudio()
+            audioPlayer = null
         }
         playButton?.setOnClickListener {
             if(audioPlayer?.isPlaying() == true) {
@@ -218,8 +248,8 @@ class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
                 audioPlayer?.stopAudio()
             }
             currentFilePosition = max(currentFilePosition - 1, 0)
-            val clickFileString = externalDirectoryPath + "/" + fileStringList!![currentFilePosition]
-            audioPlayer = AudioPlayer(clickFileString)
+            //val clickFileString = externalDirectoryPath + "/" + fileStringList!![currentFilePosition]
+            audioPlayer = AudioPlayer(externalDirectoryPath, fileStringList!!.toTypedArray(), currentFilePosition)
             audioPlayer?.startAudio()
             titleText?.text = fileStringList!![currentFilePosition]
         }
@@ -228,8 +258,8 @@ class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
                 audioPlayer?.stopAudio()
             }
             currentFilePosition = min(currentFilePosition + 1, fileStringList!!.size - 1)
-            val clickFileString = externalDirectoryPath + "/" + fileStringList!![currentFilePosition]
-            audioPlayer = AudioPlayer(clickFileString)
+            //val clickFileString = externalDirectoryPath + "/" + fileStringList!![currentFilePosition]
+            audioPlayer = AudioPlayer(externalDirectoryPath, fileStringList!!.toTypedArray(), currentFilePosition)
             audioPlayer?.startAudio()
             titleText?.text = fileStringList!![currentFilePosition]
         }
@@ -253,6 +283,32 @@ class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
                 shuffleButton?.setBackgroundColor(resources.getColor(R.color.defaultColor))
             }
         }
+    }
+
+    fun setMusicDetail(){
+        /*
+        musicSeekBar?.progress = 0
+        musicSeekBar?.max = audioPlayer!!.getMusicSec()
+        musicSeekBar?.setOnSeekBarChangeListener(object: SeekBar.OnSeekBarChangeListener{
+            val isPlay = audioPlayer?.isPlaying()
+            var position = 0
+            override fun onStartTrackingTouch(p0: SeekBar?) {
+                audioPlayer?.pauseAudio()
+            }
+
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                position = progress
+            }
+
+            override fun onStopTrackingTouch(p0: SeekBar?) {
+                audioPlayer?.setCurrentPosition(position)
+                audioPlayer?.unPauseAudio()
+            }
+        })
+
+         */
+        titleText?.text = fileStringList!![currentFilePosition]
+        musicLengthtext?.text = audioPlayer?.getMusicSec().toString()
     }
 
     //端末の戻るボタンを押下した時の処理
@@ -290,7 +346,6 @@ class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
             recordButton?.setImageResource(R.drawable.stop_icon)
             recordPauseButton?.visibility = View.VISIBLE
             switch?.visibility = View.INVISIBLE
-            Log.d("debug", viewPager!!.currentItem.toString())
         }
         // ユーザーはパーミッションを許可していない
         else if(permissionCheck?.checkAllPermissions(this) == false){
@@ -369,14 +424,16 @@ class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
 
                     //val bigEndianDoubleBuffer = buffer.map{it.toDouble()}.toDoubleArray().copyOfRange(0, fftSize)
                     //visualizer?.update(buffer.filterIndexed{idx, value -> idx % INTERVAL == 0}.toShortArray(), readSize / INTERVAL)
-                    val fft = FFT(samplingRate, buffer.map{it.toDouble()}.toDoubleArray())
+
+                    val fft = FFT(samplingRate, minFrequency, maxFrequency, buffer.map{it.toDouble()}.toDoubleArray())
                     fft.execute()
-                    handler.post { ->
+                    handler.post {
                         pitchText?.text = fft.getPitch().getOctaveName()
                         pitchText?.setTextColor(fft.getPitch().getPitchColor())
                     }
                     pitchVisualizer?.update(fft.getPitch())
-                    decibelVisualizer?.update(fft.getFFTData(), fftSize / 2)
+                    decibelVisualizer?.update(fft.getFFTData(), fft.getFFTData().size)
+
 /*
                     var fft = FFT4g(fftSize)
                     fft.rdft(1, bigEndianDoubleBuffer)
@@ -397,8 +454,13 @@ class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
             finally{
                 audioRecord?.stop()
                 audioRecord?.release()
-                if(fileCreateMode)
+                if(fileCreateMode) {
                     file?.close(applicationContext)
+                    handler.post {
+                        fileStringList!!.add(file!!.getFileName())
+                        (listView?.adapter as ArrayAdapter<String>).notifyDataSetChanged()
+                    }
+                }
             }
             return null
         }

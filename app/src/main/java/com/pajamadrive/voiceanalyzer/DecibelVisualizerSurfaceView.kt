@@ -72,7 +72,8 @@ open class DecibelVisualizerSurfaceView : SurfaceView, SurfaceHolder.Callback, R
                 var oldX: Float = 0F
                 var oldY: Float = (this.buffer[0].toFloat() / -120F) * canvas.height.toFloat()
                 for (index in 1..(this.buffer.size - 1)) {
-                    val x: Float = (log10( (100F - 10F) / this.buffer.size * index.toFloat() + 10) - 1) * canvas.width.toFloat()
+                    //xを10~100の範囲に限定し常用対数で0~1に収まるように調整
+                    val x: Float = (log10(  (100F - 10F) * index.toFloat() / this.buffer.size + 10) - 1) * canvas.width.toFloat()
                     val y: Float = (this.buffer[index].toFloat() / -120F) * canvas.height.toFloat()
                     canvas.drawLine(oldX, oldY, x, y, paint)
                     oldX = x
