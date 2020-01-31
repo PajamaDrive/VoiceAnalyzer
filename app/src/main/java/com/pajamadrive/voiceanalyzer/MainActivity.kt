@@ -20,12 +20,10 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.RandomAccessFile
 import java.lang.Math.pow
+import kotlin.collections.ArrayList
 import kotlin.collections.RandomAccess
 import kotlin.experimental.and
-import kotlin.math.log10
-import kotlin.math.max
-import kotlin.math.min
-import kotlin.math.sqrt
+import kotlin.math.*
 
 class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
     private var record: Record? = null
@@ -67,8 +65,11 @@ class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
     private var frequencyText3: TextView? = null
     private var frequencyText4: TextView? = null
     private var audioPlayer: AudioPlayer? = null
+    private var audioPlayerConstante: ArrayList<Int> = arrayListOf()
+    private var viewContainer: ArrayList<View> = arrayListOf()
     private var minFrequency = 50
     private var maxFrequency = 3000
+    private val sec = 2
     private val PERMISSION_REQUEST_CODE = 1
     private val needPermissions = arrayOf(RECORD_AUDIO, WRITE_EXTERNAL_STORAGE, READ_EXTERNAL_STORAGE)
     private val fileName: String
@@ -116,6 +117,7 @@ class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
         val decSurface = vs?.getDecSurface()
         pitchVisualizer = PitchVisualizerSurfaceView(this, surface!!)
         decibelVisualizer = DecibelVisualizerSurfaceView(this, decSurface!!)
+        //setPlayFrame()
         frequencyText1 = vs?.getFrequencyText1()
         frequencyText2 = vs?.getFrequencyText2()
         frequencyText3 = vs?.getFrequencyText3()
@@ -126,6 +128,9 @@ class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
         frequencyText2?.text = pow(10.0, logInterval + log10(minFrequency.toDouble())).toInt().toString() + "Hz"
         frequencyText3?.text = pow(10.0, logInterval * 2 + log10(minFrequency.toDouble())).toInt().toString() + "Hz"
         setRecordFrame()
+        viewContainer.add(pitchVisualizer as View)
+        viewContainer.add(decibelVisualizer as View)
+        viewContainer.add(pitchText as View)
         listView = df?.getListView()
         fileStringList = File(externalDirectoryPath).listFiles().map{it.name}.toMutableList()
         val adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, fileStringList!!)
@@ -134,46 +139,25 @@ class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
         handler.post {
             listView?.adapter = adapter
             listView?.setOnItemClickListener { adapterView, view, position, id ->
-                if (audioPlayer?.isPlaying() == true) {
-                    audioPlayer?.stopAudio()
-                }
-                currentFilePosition = position
-                val isRecordeFrame = if (audioPlayer == null) true else false
-                //val clickFileString = externalDirectoryPath + "/" + fileStringList!![currentFilePosition]
-                audioPlayer =
-                    AudioPlayer(externalDirectoryPath, fileStringList!!.toTypedArray(), currentFilePosition)
-                audioPlayer?.startAudio()
-                if (isRecordeFrame) {
+                val isRecodeFrame = if (audioPlayer == null) true else false
+                if (isRecodeFrame) {
                     val layout = findViewById(R.id.controlFrame) as LinearLayout
                     layout.removeAllViews()
                     layoutInflater.inflate(R.layout.play_frame, layout)
                     setPlayFrame()
                 }
+                if (audioPlayer?.isPlaying() == true) {
+                    audioPlayer?.stopAudio()
+                }
+                currentFilePosition = position
+                //val clickFileString = externalDirectoryPath + "/" + fileStringList!![currentFilePosition]
+                audioPlayer =
+                    AudioPlayer(externalDirectoryPath, fileStringList!!.toTypedArray(), currentFilePosition, minFrequency, maxFrequency, sec, pitchText!!, pitchVisualizer!!, decibelVisualizer!!)
+                audioPlayer?.startAudio()
+
                 setMusicDetail()
             }
         }
-        /*
-        viewPager?.addOnPageChangeListener(object: ViewPager.SimpleOnPageChangeListener(){
-            override fun onPageSelected(position: Int) {
-                val layout = findViewById(R.id.controlFrame) as LinearLayout
-                /*
-                when{
-                    position == 0 && !isPlaying && !isRecording ->{
-                        layout.removeAllViews()
-                        layoutInflater.inflate(R.layout.record_frame, layout)
-                        setRecordFrame()
-                    }
-                    position == 1 && !isPlaying && !isRecording ->{
-                        layout.removeAllViews()
-                        layoutInflater.inflate(R.layout.play_frame, layout)
-                        setPlayFrame()
-                    }
-                }
-
-                 */
-            }
-        })
-         */
     }
 
 
@@ -223,7 +207,7 @@ class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
             val layout = findViewById(R.id.controlFrame) as LinearLayout
             layout.removeAllViews()
             layoutInflater.inflate(R.layout.record_frame, layout)
-            setRecordFrame()
+            //setRecordFrame()
             audioPlayer?.stopAudio()
             audioPlayer = null
         }
@@ -249,7 +233,7 @@ class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
             }
             currentFilePosition = max(currentFilePosition - 1, 0)
             //val clickFileString = externalDirectoryPath + "/" + fileStringList!![currentFilePosition]
-            audioPlayer = AudioPlayer(externalDirectoryPath, fileStringList!!.toTypedArray(), currentFilePosition)
+            audioPlayer = AudioPlayer(externalDirectoryPath, fileStringList!!.toTypedArray(), currentFilePosition, minFrequency, maxFrequency, sec, pitchText!!, pitchVisualizer!!, decibelVisualizer!!)
             audioPlayer?.startAudio()
             titleText?.text = fileStringList!![currentFilePosition]
         }
@@ -259,7 +243,7 @@ class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
             }
             currentFilePosition = min(currentFilePosition + 1, fileStringList!!.size - 1)
             //val clickFileString = externalDirectoryPath + "/" + fileStringList!![currentFilePosition]
-            audioPlayer = AudioPlayer(externalDirectoryPath, fileStringList!!.toTypedArray(), currentFilePosition)
+            audioPlayer = AudioPlayer(externalDirectoryPath, fileStringList!!.toTypedArray(), currentFilePosition, minFrequency, maxFrequency, sec, pitchText!!, pitchVisualizer!!, decibelVisualizer!!)
             audioPlayer?.startAudio()
             titleText?.text = fileStringList!![currentFilePosition]
         }
@@ -375,19 +359,12 @@ class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
 
     inner class Record : AsyncTask<Void, DoubleArray, Void>() {
         private val samplingRate = 44100
-        //1回のFFTで使用する標本数
-        //4096 / 44100 = 約0.1秒でFFTを1回行う
-        private val fftSize = 4096
-        //分解能(認識できる最小周波数)
-        //44100 / 4096 = 約11hz
-        //mid1C以下は正確に計測できる保証はない
-        private val resolution = samplingRate.toDouble() / fftSize
-        private val dbBaseLine = pow(2.0, 15.0) * fftSize * sqrt(2.0)
-        private val INTERVAL = samplingRate / 300
         private val chCount = AudioFormat.CHANNEL_IN_MONO
         private val bitPerSample = AudioFormat.ENCODING_PCM_16BIT
         private val minBufferSize = AudioRecord.getMinBufferSize(samplingRate, chCount, bitPerSample) * 2
-        private val sec = 2
+        //1回のFFTで使用する標本数
+        //4096 / 44100 = 約0.1秒でFFTを1回行う
+        private val fftSize = pow(2.0, floor(log2(minBufferSize.toDouble()))).toInt()
         private var buffer = ShortArray(0)
         private var audioRecord: AudioRecord? = null
         private val handler = Handler(Looper.getMainLooper())
@@ -422,33 +399,13 @@ class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
                     if(fileCreateMode)
                         file?.addBigEndianData(buffer)
 
-                    //val bigEndianDoubleBuffer = buffer.map{it.toDouble()}.toDoubleArray().copyOfRange(0, fftSize)
-                    //visualizer?.update(buffer.filterIndexed{idx, value -> idx % INTERVAL == 0}.toShortArray(), readSize / INTERVAL)
-
-                    val fft = FFT(samplingRate, minFrequency, maxFrequency, buffer.map{it.toDouble()}.toDoubleArray())
-                    fft.execute()
+                    val fft = FFT(samplingRate, fftSize, minFrequency, maxFrequency, buffer.map{it.toDouble()}.toDoubleArray())
                     handler.post {
                         pitchText?.text = fft.getPitch().getOctaveName()
                         pitchText?.setTextColor(fft.getPitch().getPitchColor())
                     }
                     pitchVisualizer?.update(fft.getPitch())
                     decibelVisualizer?.update(fft.getFFTData(), fft.getFFTData().size)
-
-/*
-                    var fft = FFT4g(fftSize)
-                    fft.rdft(1, bigEndianDoubleBuffer)
-                    val fftData = bigEndianDoubleBuffer.asList().chunked(2)
-                        .map { (left, right) -> 20 * log10(sqrt(left.pow(2) + right.pow(2)) / dbBaseLine) }
-                    val maxDB = fftData.max()
-                    val maxIndex = fftData.indexOf(maxDB)
-                    val pitch = VocalRange(maxIndex * resolution)
-
-                    pitchText?.text = (maxIndex * resolution).toString() + "Hz  " + pitch.getOctaveName()
-                    pitchText?.setTextColor(pitch.getPitchColor())
-                    visualizer?.update(DoubleArray((readSize / INTERVAL),{pitch.getPitchFrequency()}), readSize / INTERVAL)
-                    decibelVisualizer?.update(fftData.toDoubleArray(), fftSize / 2)
-
- */
                 }
             }
             finally{

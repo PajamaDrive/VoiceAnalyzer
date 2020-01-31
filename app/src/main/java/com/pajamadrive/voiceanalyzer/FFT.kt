@@ -1,13 +1,10 @@
 package com.pajamadrive.voiceanalyzer
 
-import kotlin.math.log10
-import kotlin.math.pow
-import kotlin.math.sqrt
+import android.util.Log
+import java.lang.Math.pow
+import kotlin.math.*
 
-class FFT(val samplingRate: Int, val minFrequency: Int, val maxFrequency: Int, var buffer: DoubleArray){
-    //1回のFFTで使用する標本数
-    //4096 / 44100 = 約0.1秒でFFTを1回行う
-    private val fftSize = 4096
+class FFT(val samplingRate: Int, val fftSize: Int, val minFrequency: Int, val maxFrequency: Int, var buffer: DoubleArray){
     //分解能(認識できる最小周波数)
     //44100 / 4096 = 約11hz
     //mid1C以下は正確に計測できる保証はない
@@ -18,6 +15,7 @@ class FFT(val samplingRate: Int, val minFrequency: Int, val maxFrequency: Int, v
 
     init{
         buffer = buffer.copyOfRange(0, fftSize)
+        execute()
     }
 
     fun execute(){
