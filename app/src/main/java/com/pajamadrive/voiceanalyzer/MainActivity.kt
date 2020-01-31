@@ -52,6 +52,7 @@ class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
     private var file: WaveFile? = null
     private var currentFilePosition: Int = -1
     private var isShuffle: Boolean = false
+    private var isLoop: Boolean = false
     private var storageCheck: ExternalStorageCheck? = null
     private var viewPager: ViewPager? = null
     private var vs: VisualizeSurfaceFragment? = null
@@ -65,7 +66,7 @@ class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
     private var frequencyText3: TextView? = null
     private var frequencyText4: TextView? = null
     private var audioPlayer: AudioPlayer? = null
-    private var audioPlayerConstante: ArrayList<Int> = arrayListOf()
+    private var audioPlayerConstant: ArrayList<Int> = arrayListOf()
     private var viewContainer: ArrayList<View> = arrayListOf()
     private var minFrequency = 50
     private var maxFrequency = 3000
@@ -128,9 +129,7 @@ class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
         frequencyText2?.text = pow(10.0, logInterval + log10(minFrequency.toDouble())).toInt().toString() + "Hz"
         frequencyText3?.text = pow(10.0, logInterval * 2 + log10(minFrequency.toDouble())).toInt().toString() + "Hz"
         setRecordFrame()
-        viewContainer.add(pitchVisualizer as View)
-        viewContainer.add(decibelVisualizer as View)
-        viewContainer.add(pitchText as View)
+
         listView = df?.getListView()
         fileStringList = File(externalDirectoryPath).listFiles().map{it.name}.toMutableList()
         val adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, fileStringList!!)
@@ -151,9 +150,7 @@ class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
                 }
                 currentFilePosition = position
                 //val clickFileString = externalDirectoryPath + "/" + fileStringList!![currentFilePosition]
-                audioPlayer =
-                    AudioPlayer(externalDirectoryPath, fileStringList!!.toTypedArray(), currentFilePosition, minFrequency, maxFrequency, sec, pitchText!!, pitchVisualizer!!, decibelVisualizer!!)
-                audioPlayer?.startAudio()
+                startAudio()
 
                 setMusicDetail()
             }
@@ -207,7 +204,7 @@ class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
             val layout = findViewById(R.id.controlFrame) as LinearLayout
             layout.removeAllViews()
             layoutInflater.inflate(R.layout.record_frame, layout)
-            //setRecordFrame()
+            setRecordFrame()
             audioPlayer?.stopAudio()
             audioPlayer = null
         }
@@ -233,8 +230,7 @@ class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
             }
             currentFilePosition = max(currentFilePosition - 1, 0)
             //val clickFileString = externalDirectoryPath + "/" + fileStringList!![currentFilePosition]
-            audioPlayer = AudioPlayer(externalDirectoryPath, fileStringList!!.toTypedArray(), currentFilePosition, minFrequency, maxFrequency, sec, pitchText!!, pitchVisualizer!!, decibelVisualizer!!)
-            audioPlayer?.startAudio()
+            startAudio()
             titleText?.text = fileStringList!![currentFilePosition]
         }
         nextButton?.setOnClickListener {
@@ -243,30 +239,61 @@ class MainActivity : AppCompatActivity(), FragmentCheckListener, Runnable {
             }
             currentFilePosition = min(currentFilePosition + 1, fileStringList!!.size - 1)
             //val clickFileString = externalDirectoryPath + "/" + fileStringList!![currentFilePosition]
-            audioPlayer = AudioPlayer(externalDirectoryPath, fileStringList!!.toTypedArray(), currentFilePosition, minFrequency, maxFrequency, sec, pitchText!!, pitchVisualizer!!, decibelVisualizer!!)
-            audioPlayer?.startAudio()
+            startAudio()
             titleText?.text = fileStringList!![currentFilePosition]
         }
         repeatButton?.setOnClickListener {
-            if(audioPlayer?.getIsLoop() == false){
-                audioPlayer?.setIsLoop(true)
+            if(isLoop == false){
+                isLoop = true
+                audioPlayer?.convertIsLoop()
                 repeatButton?.setBackgroundColor(resources.getColor(R.color.availableColor))
+                if(isShuffle == true){
+                    isShuffle = false
+                    audioPlayer?.convertIsShuffle()
+                    shuffleButton?.setBackgroundColor(resources.getColor(R.color.defaultColor))
+                }
             }
             else{
-                audioPlayer?.setIsLoop(false)
+                isLoop = false
+                audioPlayer?.convertIsLoop()
                 repeatButton?.setBackgroundColor(resources.getColor(R.color.defaultColor))
             }
         }
         shuffleButton?.setOnClickListener {
             if(isShuffle == false){
                 isShuffle = true
+                audioPlayer?.convertIsShuffle()
                 shuffleButton?.setBackgroundColor(resources.getColor(R.color.availableColor))
+                if(isLoop == true){
+                    isLoop = false
+                    audioPlayer?.convertIsLoop()
+                    repeatButton?.setBackgroundColor(resources.getColor(R.color.defaultColor))
+                }
             }
             else{
                 isShuffle = false
+                audioPlayer?.convertIsShuffle()
                 shuffleButton?.setBackgroundColor(resources.getColor(R.color.defaultColor))
             }
         }
+    }
+
+    fun startAudio(){
+        viewContainer.clear()
+        viewContainer.add(pitchVisualizer!! as View)
+        viewContainer.add(decibelVisualizer!! as View)
+        viewContainer.add(pitchText!! as View)
+        viewContainer.add(playButton!! as View)
+        viewContainer.add(titleText!! as View)
+        audioPlayerConstant.clear()
+        audioPlayerConstant.add(currentFilePosition)
+        audioPlayerConstant.add(minFrequency)
+        audioPlayerConstant.add(maxFrequency)
+        audioPlayerConstant.add(sec)
+        audioPlayerConstant.add(isShuffle.compareTo(true))
+        audioPlayerConstant.add(isLoop.compareTo(true))
+        audioPlayer = AudioPlayer(externalDirectoryPath, fileStringList!!.toTypedArray(), audioPlayerConstant, viewContainer)
+        audioPlayer?.startAudio()
     }
 
     fun setMusicDetail(){

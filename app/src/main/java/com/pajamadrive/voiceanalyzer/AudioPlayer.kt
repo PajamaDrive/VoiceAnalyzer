@@ -7,6 +7,8 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
 import android.util.Log
+import android.view.View
+import android.widget.ImageButton
 import android.widget.TextView
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
@@ -18,9 +20,8 @@ import kotlin.experimental.and
 import kotlin.math.*
 import kotlin.random.Random
 
-class AudioPlayer(private val dirPath: String, private val fileNameList: Array<String>, private var currentFilePosition: Int,
-                  private val minFrequency: Int, private val maxFrequency: Int, private val sec: Int, private val pitchText: TextView,
-                  private val pitchVisualizer: PitchVisualizerSurfaceView, private val decibelVisualizer: DecibelVisualizerSurfaceView): Runnable{
+class AudioPlayer(private val dirPath: String, private val fileNameList: Array<String>, private val constantContainer: ArrayList<Int>,
+                  private val viewContainer: ArrayList<View>): Runnable{
     private var file: File? = null
     private var byteData = ByteArray(0)
     private var doubleData = DoubleArray(0)
@@ -34,8 +35,17 @@ class AudioPlayer(private val dirPath: String, private val fileNameList: Array<S
     private var currentTimePosition: Int = 0
     private var minBufferSize: Int = 0
     private var fftSize: Int = 0
-    private var isLoop: Boolean = false
-    private var isShuffle: Boolean = false
+    private var currentFilePosition = constantContainer.get(0)
+    private val minFrequency = constantContainer.get(1)
+    private val maxFrequency = constantContainer.get(2)
+    private val sec = constantContainer.get(3)
+    private var isShuffle = if(constantContainer.get(4) == 0) true else false
+    private var isLoop = if(constantContainer.get(5) == 0) true else false
+    private val pitchVisualizer = viewContainer.get(0) as PitchVisualizerSurfaceView
+    private val decibelVisualizer = viewContainer.get(1) as DecibelVisualizerSurfaceView
+    private val pitchText = viewContainer.get(2) as TextView
+    private val playButton = viewContainer.get(3) as ImageButton
+    private val titleText = viewContainer.get(4) as TextView
     private val handler = Handler(Looper.getMainLooper())
 
     init{
@@ -62,20 +72,19 @@ class AudioPlayer(private val dirPath: String, private val fileNameList: Array<S
 
     fun byteArrayToDoubleArray(byteArray: ByteArray): DoubleArray {
         var result = arrayListOf<Double>()
-        for (index in 0..(byteArray.size / 4 - 1)) {
-            result.add(byteArrayToShort(byteArray.copyOfRange(index * 4, (index + 1) * 4)).toDouble())
+        for (index in 0..(byteArray.size / 2 - 1)) {
+            result.add(byteArrayToShort(convertEndian(byteArray.copyOfRange(index * 2, (index + 1) * 2))).toDouble())
         }
         return result.toDoubleArray()
     }
 
     override fun run() {
-        if(audioTrack != null){
+        if (audioTrack != null) {
             audioTrack?.play()
-
-            GlobalScope.launch{
-                var offset = currentTimePosition / 4
-                while(audioThread != null){
-                    if(fftSize < doubleData.size - offset) {
+            GlobalScope.launch {
+                var offset = currentTimePosition / 2
+                while (audioThread != null) {
+                    if (fftSize < doubleData.size - offset) {
                         val fft = FFT(samplingRate, fftSize, minFrequency, maxFrequency, doubleData.copyOfRange(offset, offset + fftSize))
                         handler.post {
                             pitchText.text = fft.getPitch().getOctaveName()
@@ -84,20 +93,12 @@ class AudioPlayer(private val dirPath: String, private val fileNameList: Array<S
                         pitchVisualizer.update(fft.getPitch())
                         decibelVisualizer.update(fft.getFFTData(), fft.getFFTData().size)
                     }
-                    Thread.sleep(150)
-                    offset += (0.15 * samplingRate * (bitPerSample / 8) * chCount / 4).toInt()
+                    Thread.sleep((fftSize.toDouble() / samplingRate * 1000 * 2).toLong())
+                    offset += (fftSize.toDouble() / samplingRate * 2 * samplingRate * (bitPerSample / 8) * chCount / 2).toInt()
                 }
             }
-
-
+            audioTrack?.setNotificationMarkerPosition(doubleData.size - currentTimePosition / 2)
             audioTrack?.write(byteData, WaveFile.getHeaderSize() + currentTimePosition, byteData.size - WaveFile.getHeaderSize() - currentTimePosition)
-            stopAudio()
-            /*
-            if (audioTrack?.playState != AudioTrack.PLAYSTATE_STOPPED) {
-                audioTrack?.stop()
-                audioTrack?.flush()
-            }
-            */
         }
     }
 
@@ -132,7 +133,7 @@ class AudioPlayer(private val dirPath: String, private val fileNameList: Array<S
         finally{
             inputStream?.close()
         }
-        doubleData = byteArrayToDoubleArray(convertEndian(byteData.copyOfRange(WaveFile.getHeaderSize(), byteData.size)))
+        doubleData = byteArrayToDoubleArray(byteData.copyOfRange(WaveFile.getHeaderSize(), byteData.size))
         pitchVisualizer?.initializeBuffer(samplingRate / fftSize * sec)
         decibelVisualizer?.initializeBuffer(fftSize / 2)
         bufSize = android.media.AudioTrack.getMinBufferSize(samplingRate, if(chCount == 1) AudioFormat.CHANNEL_OUT_MONO else AudioFormat.CHANNEL_OUT_STEREO, if(bitPerSample == 16) AudioFormat.ENCODING_PCM_16BIT else AudioFormat.ENCODING_PCM_8BIT)
@@ -146,35 +147,45 @@ class AudioPlayer(private val dirPath: String, private val fileNameList: Array<S
         else{
             audioTrack = AudioTrack(AudioManager.STREAM_MUSIC, samplingRate, chCount, bitPerSample, bufSize, AudioTrack.MODE_STREAM)
         }
+
         audioTrack?.setPlaybackPositionUpdateListener(object: AudioTrack.OnPlaybackPositionUpdateListener{
             override fun onPeriodicNotification(track: AudioTrack?) {
             }
 
             override fun onMarkerReached(track: AudioTrack?) {
                 if(track!!.playState == AudioTrack.PLAYSTATE_PLAYING){
-                    track!!.stop()
-                    track!!.flush()
-                    audioThread = null
+                    handler.post{
+                        playButton?.setImageResource(android.R.drawable.ic_media_play)
+                    }
+                    stopAudio()
                     if(isLoop)
                         startAudio()
-                    else if(isShuffle){
+                    if(isShuffle){
                         currentFilePosition = Random.nextInt(fileNameList.size)
                         initialize()
+                        startAudio()
                     }
                 }
             }
         })
+
     }
 
     fun stopAudio(){
         audioThread = null
         audioTrack?.stop()
-        audioTrack?.release()
-        audioTrack = null
+        currentTimePosition = 0
+        //audioTrack?.release()
     }
 
     fun startAudio(){
         if(audioThread == null){
+            pitchVisualizer?.initializeBuffer(samplingRate / fftSize * sec)
+            decibelVisualizer?.initializeBuffer(fftSize / 2)
+            handler.post{
+                playButton?.setImageResource(android.R.drawable.ic_media_pause)
+                titleText.text = fileNameList[currentFilePosition]
+            }
             audioThread = Thread(this)
             audioThread?.start()
         }
@@ -189,6 +200,8 @@ class AudioPlayer(private val dirPath: String, private val fileNameList: Array<S
 
     fun unPauseAudio(){
         if(audioThread == null){
+            pitchVisualizer?.initializeBuffer(samplingRate / fftSize * sec)
+            decibelVisualizer?.initializeBuffer(fftSize / 2)
             audioThread = Thread(this)
             audioThread?.start()
         }
@@ -217,16 +230,12 @@ class AudioPlayer(private val dirPath: String, private val fileNameList: Array<S
         return result
     }
 
-    fun getIsLoop(): Boolean = isLoop
-
-    fun setIsLoop(element: Boolean){
-        isLoop = element
+    fun convertIsLoop(){
+        isLoop = !isLoop
     }
 
-    fun getIsShuffle(): Boolean = isShuffle
-
-    fun setIsShuffle(element: Boolean){
-        isShuffle = element
+    fun convertIsShuffle(){
+        isShuffle = !isShuffle
     }
 
     fun setCurrentTimePosition(element: Int){
@@ -236,5 +245,4 @@ class AudioPlayer(private val dirPath: String, private val fileNameList: Array<S
     fun getMusicSec(): Int = musicSec
 
     fun isPlaying(): Boolean = if(audioTrack?.playState == AudioTrack.PLAYSTATE_PLAYING) true else false
-
 }
